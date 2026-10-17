@@ -1,5 +1,6 @@
 import type { CleanRow, ImportDocument, Issue, ResourceKind } from '../core/types'
 import { TEMPLATES } from '../templates'
+import { isAutoCreatableTarget, isValidSlug, parseReference } from './references'
 
 /** What a document is checked against besides itself. */
 export interface ValidationContext {
@@ -70,8 +71,23 @@ export function validateDocument(document: ImportDocument, context: ValidationCo
       const values = parsed.data
       for (const rule of template.references) {
         const value = values[rule.field]
-        for (const target of Array.isArray(value) ? value : value === undefined ? [] : [value]) {
-          if (!known(rule.target, String(target))) fail(`${rule.target} "${String(target)}" is not in this import or in the store`, rule.field)
+        for (const item of Array.isArray(value) ? value : value === undefined ? [] : [value]) {
+          const { isCreate, slug, raw } = parseReference(item)
+          if (!slug) {
+            fail(`empty reference in "${raw}"`, rule.field)
+            continue
+          }
+          if (isCreate) {
+            if (!isAutoCreatableTarget(rule.target)) {
+              fail(`cannot auto-create "${rule.target}" via create: reference`, rule.field)
+            } else if (!isValidSlug(slug)) {
+              fail(`invalid slug "${slug}" in "${raw}": use lower case letters, digits and dashes only (e.g. gold-ring)`, rule.field)
+            }
+          } else {
+            if (!known(rule.target, slug)) {
+              fail(`${rule.target} "${slug}" is not in this import or in the store`, rule.field)
+            }
+          }
         }
       }
       for (const { field, key } of mediaReferences(values, '')) {

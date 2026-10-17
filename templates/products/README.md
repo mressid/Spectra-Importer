@@ -11,8 +11,8 @@ Two kinds, same file:
 | `name` | yes | `Gold ring` | |
 | `thumbnailUrl` | yes | `media:ring-gold-1.jpg` | `https://…` or `media:<fileName>`: an image uploaded in the Images step, named exactly as the file |
 | `images` | no | `media:a.jpg\|media:b.jpg` | more photos, in display order (the gallery); same kind of values; JSON/YAML use a list |
-| `brand` | no | `acme` | slug of a brand |
-| `categories`, `tags`, `collections` | no | `rings\|engagement-rings` | slugs; CSV separates with `\|`, JSON/YAML use lists. Unknown slug = error |
+| `brand` | no | `acme` | slug of a brand. Prefix with `create:` (e.g. `create:acme`) to auto-create if not already in store |
+| `categories`, `tags`, `collections` | no | `rings\|engagement-rings` | slugs; CSV separates with `\|`, JSON/YAML use lists. Prefix with `create:` (e.g. `create:rings`) to auto-create if not defined. Unknown unprefixed slug = error |
 | `shortDescription` | no | | up to 500 characters |
 | `description` | no | | up to 50 000 characters; format below |
 | `descriptionFormat` | no | `MARKDOWN` | `MARKDOWN` (default), `HTML`, `TEXT` |

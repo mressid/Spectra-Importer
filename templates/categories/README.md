@@ -4,7 +4,7 @@
 |---|---|---|---|
 | `slug` | yes, **identifier** | `rings` | |
 | `name` | yes | `Rings` | |
-| `parent` | no | `rings` | slug of the parent category; empty = top level. The parent must exist in this file or in the store. Parents are created before children (the planner sorts them) |
+| `parent` | no | `rings` | slug of the parent category; empty = top level. Prefix with `create:` (e.g. `create:jewelry`) to auto-create parent category. Otherwise parent must exist in this file or store. Parents are created before children (the planner sorts them) |
 | `sortOrder` | no | `1` | whole number ≥ 0 |
 | `isActive` | no | `true` | `true/false/yes/no/1/0` |
 | `seoTitle` | no | | up to 70 characters |

@@ -162,4 +162,151 @@ describe('buildPlan', () => {
     const childOp = ops.find((op) => op.key === 'categories:wedding-rings')
     expect(childOp?.after).toEqual(['categories:rings'])
   })
+
+  it('generates synthetic operations for create: references with dependency ordering', () => {
+    const prodRow: CleanRow = {
+      id: 'gold-ring',
+      index: 0,
+      values: {
+        slug: 'gold-ring',
+        name: 'Gold Ring',
+        thumbnailUrl: 'https://cdn.example/ring.jpg',
+        brand: 'create:acme-jewelry',
+        categories: ['create:rings'],
+        tags: ['create:sale-tag'],
+        collections: ['create:summer-2026'],
+        hasVariants: false,
+        sku: 'RING-1',
+        price: 50,
+      },
+    }
+
+    const ops = buildPlan([
+      { template: 'products', rows: [prodRow], onConflict: 'skip', library: fakeLibrary },
+    ])
+
+    // Auto-created tag
+    const tagOp = ops.find((op) => op.key === 'tags:sale-tag')
+    expect(tagOp).toBeDefined()
+    expect(tagOp!.method).toBe('POST')
+    expect(tagOp!.path).toBe('/api/v1/tags')
+    expect(tagOp!.body).toEqual({ slug: 'sale-tag', name: 'Sale Tag' })
+
+    // Auto-created brand
+    const brandOp = ops.find((op) => op.key === 'brands:acme-jewelry')
+    expect(brandOp).toBeDefined()
+    expect(brandOp!.body).toMatchObject({ slug: 'acme-jewelry', name: 'Acme Jewelry' })
+
+    // Auto-created category
+    const catOp = ops.find((op) => op.key === 'categories:rings')
+    expect(catOp).toBeDefined()
+    expect(catOp!.body).toMatchObject({ slug: 'rings', name: 'Rings', isActive: true })
+
+    // Auto-created collection
+    const colOp = ops.find((op) => op.key === 'collections:summer-2026')
+    expect(colOp).toBeDefined()
+    expect(colOp!.body).toMatchObject({ slug: 'summer-2026', name: 'Summer 2026', isActive: true })
+
+    // Product operation links to brand and waits for it
+    const prodOp = ops.find((op) => op.key === 'products:gold-ring')
+    expect(prodOp).toBeDefined()
+    expect((prodOp!.body as { brandId: string }).brandId).toBe('{brands:acme-jewelry}')
+    expect(prodOp!.after).toContain('brands:acme-jewelry')
+
+    // Linking operations
+    const catLink = ops.find((op) => op.key === 'products:gold-ring:category:rings')
+    expect(catLink).toBeDefined()
+    expect(catLink!.path).toBe('/api/v1/products/{products:gold-ring}/categories/{categories:rings}')
+    expect(catLink!.after).toEqual(['products:gold-ring', 'categories:rings'])
+
+    const tagLink = ops.find((op) => op.key === 'products:gold-ring:tag:sale-tag')
+    expect(tagLink).toBeDefined()
+    expect(tagLink!.path).toBe('/api/v1/products/{products:gold-ring}/tags/{tags:sale-tag}')
+    expect(tagLink!.after).toEqual(['products:gold-ring', 'tags:sale-tag'])
+
+    const colLink = ops.find((op) => op.key === 'products:gold-ring:collection:summer-2026')
+    expect(colLink).toBeDefined()
+    expect(colLink!.path).toBe('/api/v1/products/{products:gold-ring}/collections/{collections:summer-2026}')
+    expect(colLink!.after).toEqual(['products:gold-ring', 'collections:summer-2026'])
+  })
+
+  it('deduplicates create: references across multiple products and does not duplicate if explicitly provided', () => {
+    const prod1: CleanRow = {
+      id: 'p1',
+      index: 0,
+      values: {
+        slug: 'p1',
+        name: 'Product 1',
+        thumbnailUrl: 'https://cdn.example/1.jpg',
+        brand: 'create:acme',
+        categories: ['create:rings'],
+        hasVariants: false,
+        sku: 'P1',
+        price: 10,
+      },
+    }
+    const prod2: CleanRow = {
+      id: 'p2',
+      index: 1,
+      values: {
+        slug: 'p2',
+        name: 'Product 2',
+        thumbnailUrl: 'https://cdn.example/2.jpg',
+        brand: 'create:acme',
+        categories: ['create:rings'],
+        hasVariants: false,
+        sku: 'P2',
+        price: 20,
+      },
+    }
+    const explicitBrand: CleanRow = {
+      id: 'acme',
+      index: 0,
+      values: {
+        slug: 'acme',
+        name: 'Acme Official Brand',
+        website: 'https://acme.example',
+      },
+    }
+
+    const ops = buildPlan([
+      { template: 'brands', rows: [explicitBrand], onConflict: 'skip', library: fakeLibrary },
+      { template: 'products', rows: [prod1, prod2], onConflict: 'skip', library: fakeLibrary },
+    ])
+
+    // Should only have 1 brand op for acme, and it should use the explicit definition!
+    const brandOps = ops.filter((op) => op.key === 'brands:acme')
+    expect(brandOps).toHaveLength(1)
+    expect((brandOps[0].body as { name: string }).name).toBe('Acme Official Brand')
+
+    // Should only have 1 category op for rings (auto-created)
+    const catOps = ops.filter((op) => op.key === 'categories:rings')
+    expect(catOps).toHaveLength(1)
+    expect((catOps[0].body as { name: string }).name).toBe('Rings')
+  })
+
+  it('auto-creates parent category when referenced via create: in category parent', () => {
+    const childCat: CleanRow = {
+      id: 'engagement-rings',
+      index: 0,
+      values: {
+        slug: 'engagement-rings',
+        name: 'Engagement Rings',
+        parent: 'create:rings',
+      },
+    }
+
+    const ops = buildPlan([
+      { template: 'categories', rows: [childCat], onConflict: 'skip', library: fakeLibrary },
+    ])
+
+    const parentOp = ops.find((op) => op.key === 'categories:rings')
+    expect(parentOp).toBeDefined()
+    expect(parentOp!.body).toMatchObject({ slug: 'rings', name: 'Rings' })
+
+    const childOp = ops.find((op) => op.key === 'categories:engagement-rings')
+    expect(childOp).toBeDefined()
+    expect((childOp!.body as { parentId: string }).parentId).toBe('{categories:rings}')
+    expect(childOp!.after).toEqual(['categories:rings'])
+  })
 })

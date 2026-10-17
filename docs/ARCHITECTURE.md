@@ -65,6 +65,8 @@ Rows use slugs (`brand: "acme"`, `parent: "rings"`); the API wants ids (`brandId
 references are written as placeholders (`{brands:acme}`) and filled by the runner from ids returned earlier in the run
 or found by `loadStoreIndex`.
 
+References can point to already existing records in the store or staged import files. In addition, references can explicitly request on-the-fly resource creation using the `create:<slug>` prefix (e.g. `brand: "create:acme"`, `categories: ["create:rings"]`, `tags: ["create:sale"]`, `collections: ["create:summer-2026"]`, `parent: "create:jewelry"`). When prefixed with `create:`, the planner automatically generates and orders synthetic create operations for those resources if they are not already provided in the import files. Unprefixed references continue to require that the target exists beforehand.
+
 | Template | Calls (in this order) |
 |---|---|
 | tags | `POST /api/v1/tags` `{slug,name}` |

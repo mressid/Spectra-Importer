@@ -1,5 +1,12 @@
 import type { CleanRow, ConflictMode, Operation, ResourceKind } from '../core/types'
 import { RESOURCE_KINDS } from '../core/types'
+import {
+  type AutoCreatableTarget,
+  AUTO_CREATABLE_TARGETS,
+  isAutoCreatableTarget,
+  parseReference,
+  slugToTitle,
+} from '../validate/references'
 import { resolveMedia, type ImageLibrary } from './imageLibrary'
 
 export interface PlanInput {
@@ -23,7 +30,7 @@ function sortCategoriesParentFirst(rows: CleanRow[]): CleanRow[] {
   while (remaining.size > 0 && progress) {
     progress = false
     for (const [id, row] of remaining) {
-      const parent = String(row.values.parent ?? '').trim()
+      const parent = parseReference(row.values.parent).slug
       // Can be emitted if it has no parent, parent is not in this document, or parent is already emitted
       if (!parent || !remaining.has(parent) || visited.has(parent)) {
         result.push(row)
@@ -63,14 +70,83 @@ export function buildPlan(inputs: PlanInput[]): Operation[] {
     }
   }
 
+  // Scan inputs for explicit create:<slug> references that need to be auto-created
+  const autoCreated = new Map<AutoCreatableTarget, Set<string>>()
+  for (const kind of AUTO_CREATABLE_TARGETS) {
+    autoCreated.set(kind, new Set<string>())
+  }
+
+  for (const input of inputs) {
+    for (const row of input.rows) {
+      if (input.template === 'categories') {
+        const parent = parseReference(row.values.parent)
+        if (parent.isCreate && parent.slug) {
+          autoCreated.get('categories')!.add(parent.slug)
+        }
+      } else if (input.template === 'products') {
+        const brand = parseReference(row.values.brand)
+        if (brand.isCreate && brand.slug) {
+          autoCreated.get('brands')!.add(brand.slug)
+        }
+        for (const cat of (row.values.categories as string[]) ?? []) {
+          const ref = parseReference(cat)
+          if (ref.isCreate && ref.slug) autoCreated.get('categories')!.add(ref.slug)
+        }
+        for (const tag of (row.values.tags as string[]) ?? []) {
+          const ref = parseReference(tag)
+          if (ref.isCreate && ref.slug) autoCreated.get('tags')!.add(ref.slug)
+        }
+        for (const col of (row.values.collections as string[]) ?? []) {
+          const ref = parseReference(col)
+          if (ref.isCreate && ref.slug) autoCreated.get('collections')!.add(ref.slug)
+        }
+      }
+    }
+  }
+
+  // Remove any slug that is already provided as an explicit row in inputs
+  for (const kind of AUTO_CREATABLE_TARGETS) {
+    const explicitRows = inputByKind.get(kind)?.rows ?? []
+    for (const row of explicitRows) {
+      autoCreated.get(kind)!.delete(row.id)
+    }
+  }
+
+  // Register synthetic auto-create keys in allKeys
+  for (const [kind, slugs] of autoCreated) {
+    for (const slug of slugs) {
+      allKeys.add(`${kind}:${slug}`)
+    }
+  }
+
   for (const kind of RESOURCE_KINDS) {
     const input = inputByKind.get(kind)
-    if (!input || input.rows.length === 0) continue
+    const autoSlugs = isAutoCreatableTarget(kind) ? autoCreated.get(kind) : undefined
+    const hasAuto = Boolean(autoSlugs && autoSlugs.size > 0)
+    const hasRows = Boolean(input && input.rows.length > 0)
 
-    const { rows, library } = input
+    if (!hasRows && !hasAuto) continue
+
+    const rows = input?.rows ?? []
+    const library = input?.library ?? new Map()
 
     switch (kind) {
       case 'tags': {
+        if (autoSlugs) {
+          for (const slug of autoSlugs) {
+            const title = slugToTitle(slug)
+            rawOps.push({
+              key: `tags:${slug}`,
+              template: 'tags',
+              rowId: slug,
+              label: `Create tag "${title}"`,
+              method: 'POST',
+              path: '/api/v1/tags',
+              body: { slug, name: title },
+              after: [],
+            })
+          }
+        }
         for (const row of rows) {
           rawOps.push({
             key: `tags:${row.id}`,
@@ -87,6 +163,27 @@ export function buildPlan(inputs: PlanInput[]): Operation[] {
       }
 
       case 'brands': {
+        if (autoSlugs) {
+          for (const slug of autoSlugs) {
+            const title = slugToTitle(slug)
+            rawOps.push({
+              key: `brands:${slug}`,
+              template: 'brands',
+              rowId: slug,
+              label: `Create brand "${title}"`,
+              method: 'POST',
+              path: '/api/v1/brands',
+              body: {
+                slug,
+                name: title,
+                website: undefined,
+                country: undefined,
+                logoUrl: null,
+              },
+              after: [],
+            })
+          }
+        }
         for (const row of rows) {
           const logo = row.values.logoUrl ? resolveMedia(String(row.values.logoUrl), library) : null
           rawOps.push({
@@ -110,9 +207,33 @@ export function buildPlan(inputs: PlanInput[]): Operation[] {
       }
 
       case 'categories': {
+        if (autoSlugs) {
+          for (const slug of autoSlugs) {
+            const title = slugToTitle(slug)
+            rawOps.push({
+              key: `categories:${slug}`,
+              template: 'categories',
+              rowId: slug,
+              label: `Create category "${title}"`,
+              method: 'POST',
+              path: '/api/v1/categories',
+              body: {
+                slug,
+                name: title,
+                parentId: null,
+                sortOrder: 0,
+                isActive: true,
+                seoTitle: undefined,
+                seoDescription: undefined,
+                imageUrl: null,
+              },
+              after: [],
+            })
+          }
+        }
         const sorted = sortCategoriesParentFirst(rows)
         for (const row of sorted) {
-          const parentSlug = String(row.values.parent ?? '').trim()
+          const parentSlug = parseReference(row.values.parent).slug
           const parentKey = parentSlug ? `categories:${parentSlug}` : null
           const img = row.values.imageUrl ? resolveMedia(String(row.values.imageUrl), library) : null
 
@@ -140,6 +261,28 @@ export function buildPlan(inputs: PlanInput[]): Operation[] {
       }
 
       case 'collections': {
+        if (autoSlugs) {
+          for (const slug of autoSlugs) {
+            const title = slugToTitle(slug)
+            rawOps.push({
+              key: `collections:${slug}`,
+              template: 'collections',
+              rowId: slug,
+              label: `Create collection "${title}"`,
+              method: 'POST',
+              path: '/api/v1/collections',
+              body: {
+                slug,
+                name: title,
+                description: undefined,
+                startAt: undefined,
+                endAt: undefined,
+                isActive: true,
+              },
+              after: [],
+            })
+          }
+        }
         for (const row of rows) {
           rawOps.push({
             key: `collections:${row.id}`,
@@ -165,7 +308,7 @@ export function buildPlan(inputs: PlanInput[]): Operation[] {
       case 'products': {
         for (const row of rows) {
           const prodKey = `products:${row.id}`
-          const brandSlug = String(row.values.brand ?? '').trim()
+          const brandSlug = parseReference(row.values.brand).slug
           const brandKey = brandSlug ? `brands:${brandSlug}` : null
           const thumb = row.values.thumbnailUrl ? resolveMedia(String(row.values.thumbnailUrl), library) : null
 
@@ -222,13 +365,15 @@ export function buildPlan(inputs: PlanInput[]): Operation[] {
           // Sub-calls: categories
           const categories = (row.values.categories as string[]) ?? []
           for (const cat of categories) {
-            const catKey = `categories:${cat}`
+            const catSlug = parseReference(cat).slug
+            if (!catSlug) continue
+            const catKey = `categories:${catSlug}`
             const after = allKeys.has(catKey) ? [prodKey, catKey] : [prodKey]
             rawOps.push({
-              key: `${prodKey}:category:${cat}`,
+              key: `${prodKey}:category:${catSlug}`,
               template: 'products',
               rowId: row.id,
-              label: `Link product "${row.id}" to category "${cat}"`,
+              label: `Link product "${row.id}" to category "${catSlug}"`,
               method: 'POST',
               path: `/api/v1/products/{${prodKey}}/categories/{${catKey}}`,
               after,
@@ -238,13 +383,15 @@ export function buildPlan(inputs: PlanInput[]): Operation[] {
           // Sub-calls: tags
           const tags = (row.values.tags as string[]) ?? []
           for (const tag of tags) {
-            const tagKey = `tags:${tag}`
+            const tagSlug = parseReference(tag).slug
+            if (!tagSlug) continue
+            const tagKey = `tags:${tagSlug}`
             const after = allKeys.has(tagKey) ? [prodKey, tagKey] : [prodKey]
             rawOps.push({
-              key: `${prodKey}:tag:${tag}`,
+              key: `${prodKey}:tag:${tagSlug}`,
               template: 'products',
               rowId: row.id,
-              label: `Link product "${row.id}" to tag "${tag}"`,
+              label: `Link product "${row.id}" to tag "${tagSlug}"`,
               method: 'POST',
               path: `/api/v1/products/{${prodKey}}/tags/{${tagKey}}`,
               after,
@@ -254,13 +401,15 @@ export function buildPlan(inputs: PlanInput[]): Operation[] {
           // Sub-calls: collections
           const collections = (row.values.collections as string[]) ?? []
           for (const col of collections) {
-            const colKey = `collections:${col}`
+            const colSlug = parseReference(col).slug
+            if (!colSlug) continue
+            const colKey = `collections:${colSlug}`
             const after = allKeys.has(colKey) ? [prodKey, colKey] : [prodKey]
             rawOps.push({
-              key: `${prodKey}:collection:${col}`,
+              key: `${prodKey}:collection:${colSlug}`,
               template: 'products',
               rowId: row.id,
-              label: `Link product "${row.id}" to collection "${col}"`,
+              label: `Link product "${row.id}" to collection "${colSlug}"`,
               method: 'POST',
               path: `/api/v1/products/{${prodKey}}/collections/{${colKey}}`,
               after,
@@ -309,7 +458,7 @@ export function buildPlan(inputs: PlanInput[]): Operation[] {
 
       case 'variants': {
         for (const row of rows) {
-          const productSlug = String(row.values.product ?? '').trim()
+          const productSlug = parseReference(row.values.product).slug
           const productKey = `products:${productSlug}`
           const after = allKeys.has(productKey) ? [productKey] : []
 

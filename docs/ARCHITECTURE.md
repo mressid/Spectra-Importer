@@ -28,6 +28,7 @@ touching the rest.
 | 5 | **Plan**: validated rows → ordered `Operation[]` | `src/upload/plan.ts` | done, tested |
 | 6 | **Run**: send the operations, fill ids, report | `src/upload/run.ts` | done, tested |
 | 7 | **UI**: 5-step page | `src/ui/` | done |
+| 8 | **Graph Builder**: visual workflow nodes → `ImportDocument`s + `manifest.json` | `src/graph/`, `src/ui/GraphBuilder/` | done, tested |
 | – | **Image library**: upload images, keep name → url | `src/upload/imageLibrary.ts` | done (logic, tested, screen done) |
 | – | API client (login, JSON request, file upload) | `src/upload/api.ts` | done |
 
@@ -92,6 +93,18 @@ Media has no lookup: the store deduplicates identical files itself (`duplicate: 
 ### 7. Failure handling
 One failing row never stops the rest. Dependents of a failed row are `blocked` (not sent). Errors are shown with the
 store's own message. The final `RunReport` is downloadable as JSON so a failed import can be fixed and re-run.
+
+### 8. Product Graph Builder & Bundler
+A visual, node-based workflow designer (`src/graph/`, `src/ui/GraphBuilder/`) for assembling catalogue resources without manual text editing:
+- **Graph Nodes**: Discriminated union types representing each catalogue resource (`ProductNode`, `BrandNode`, `CategoryNode`, `CollectionNode`, `TagNode`, `VariantNode`, `MediaNode`).
+- **Graph Edges**: Directional dependency edges (`belongs_to_brand`, `in_category`, `tagged_with`, `in_collection`, `has_variant`, `child_of_category`, `has_thumbnail`, `has_gallery_image`).
+- **Compiler / Bundler (`bundleGraph`)**:
+  - Compiles the node graph into standard `ImportDocument`s (products, variants, categories, brands, tags, collections).
+  - Automatically configures `create:<slug>` prefixes when nodes are flagged with `isCreate: true` or have children nodes defined directly in the graph.
+  - Automatically wires thumbnail (`thumbnailUrl`) and gallery (`images[]`) references from connected media nodes.
+  - Assembles a `manifest.json` with metadata, resource counts, and entry points.
+- **Workflow Canvas (`GraphCanvas`)**: Interactive 2D SVG/HTML canvas with Bezier curve connectors, drag-and-drop node positioning, click-to-connect ports, zoom/pan controls, and automatic column-based layout.
+- **Stage to Importer**: Users can stage compiled documents directly into the active import files list with a single click, allowing immediate validation, planning, and store execution.
 
 ## Out of scope (for now)
 Updating existing records from a diff, deleting, orders/customers/coupons, attributes/inventory levels, image editing,

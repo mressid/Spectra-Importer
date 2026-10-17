@@ -10,6 +10,7 @@ import {
   IconOperations,
   IconOverview,
   IconSettings,
+  IconWorkflow,
   IconXCircle,
   ResourceIcon,
 } from './Icons'
@@ -17,6 +18,7 @@ import type { LoadedFile } from './StepFiles'
 
 export type TabId =
   | 'overview'
+  | 'builder'
   | 'tags'
   | 'brands'
   | 'categories'
@@ -122,6 +124,26 @@ export function Sidebar({
         >
           <IconOverview size={18} className="sidebar-icon" />
           <span style={{ flex: 1, textAlign: 'left' }}>Overview</span>
+        </button>
+
+        <button
+          type="button"
+          className={`sidebar-item ${activeTab === 'builder' ? 'active' : ''}`}
+          onClick={() => onSelectTab('builder')}
+        >
+          <IconWorkflow size={18} className="sidebar-icon" />
+          <span style={{ flex: 1, textAlign: 'left' }}>Graph Builder</span>
+          <span
+            className="badge"
+            style={{
+              background: 'var(--ds-color-accent)',
+              color: 'var(--ds-color-on-accent)',
+              fontWeight: 600,
+              padding: '1px 5px',
+            }}
+          >
+            New
+          </span>
         </button>
 
         <button

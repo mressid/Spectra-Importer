@@ -20,6 +20,7 @@ import type { LoadedFile } from './StepFiles'
 import { StepImages } from './StepImages'
 import { StepImport } from './StepImport'
 import { TokenStatusWidget } from './TokenStatusWidget'
+import { GraphBuilder } from './GraphBuilder/GraphBuilder'
 
 export function App() {
   const [activeTab, setActiveTab] = useState<TabId>('overview')
@@ -216,6 +217,26 @@ export function App() {
               onAuthChange={(email) => {
                 setConnectedUser(email)
                 if (email) refreshStoreIndex()
+              }}
+            />
+          )}
+
+          {activeTab === 'builder' && (
+            <GraphBuilder
+              onStageDocuments={(documents) => {
+                const updated = { ...files }
+                for (const [k, doc] of Object.entries(documents)) {
+                  const kind = k as ResourceKind
+                  if (doc) {
+                    updated[kind] = {
+                      name: `${kind}-graph.json`,
+                      text: JSON.stringify(doc.rows, null, 2),
+                      document: doc,
+                    }
+                  }
+                }
+                setFiles(updated)
+                setActiveTab('operations')
               }}
             />
           )}

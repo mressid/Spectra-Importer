@@ -107,6 +107,23 @@ export function App() {
           library={library}
           onLibraryChange={(newLib) => setLibrary(newLib)}
           onNext={() => setCurrentStep('files')}
+          onAutoConfigure={(productDoc, variantDoc) => {
+            const updated = { ...files }
+            updated.products = {
+              name: `${String(productDoc.rows[0].slug)}.json`,
+              text: JSON.stringify(productDoc.rows),
+              document: productDoc,
+            }
+            if (variantDoc) {
+              updated.variants = {
+                name: `${String(productDoc.rows[0].slug)}-variants.json`,
+                text: JSON.stringify(variantDoc.rows),
+                document: variantDoc,
+              }
+            }
+            setFiles(updated)
+            setCurrentStep('check')
+          }}
         />
       )}
 

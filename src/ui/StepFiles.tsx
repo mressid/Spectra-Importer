@@ -4,6 +4,7 @@ import type { ImportDocument, ResourceKind, SourceFormat } from '../core/types'
 import { RESOURCE_KINDS } from '../core/types'
 import { TEMPLATES } from '../templates'
 import { templateDoc, templateExample } from '../templates/files'
+import { generateRowsFromStructuredProduct, parseStructuredFolder } from '../upload/folderStructure'
 
 export interface LoadedFile {
   name: string
@@ -52,6 +53,47 @@ export function StepFiles({ files, onFilesChange, onNext }: StepFilesProps) {
     }
   }
 
+  const handleStructuredFolder = (folderFiles: File[]) => {
+    const parsed = parseStructuredFolder(folderFiles)
+    if (parsed.products.length === 0) return
+
+    const allProductRows = []
+    const allVariantRows = []
+
+    for (const p of parsed.products) {
+      const { productRow, variantRows } = generateRowsFromStructuredProduct(p)
+      allProductRows.push(productRow)
+      allVariantRows.push(...variantRows)
+    }
+
+    const updated = { ...files }
+    if (allProductRows.length > 0) {
+      updated.products = {
+        name: `${parsed.products[0].slug}.json`,
+        text: JSON.stringify(allProductRows),
+        document: {
+          template: 'products',
+          version: 1,
+          rows: allProductRows,
+        },
+      }
+    }
+
+    if (allVariantRows.length > 0) {
+      updated.variants = {
+        name: `${parsed.products[0].slug}-variants.json`,
+        text: JSON.stringify(allVariantRows),
+        document: {
+          template: 'variants',
+          version: 1,
+          rows: allVariantRows,
+        },
+      }
+    }
+
+    onFilesChange(updated)
+  }
+
   const handleRemove = (kind: ResourceKind) => {
     const updated = { ...files }
     delete updated[kind]
@@ -66,12 +108,30 @@ export function StepFiles({ files, onFilesChange, onNext }: StepFilesProps) {
         <div>
           <h2>3. Choose Data Files</h2>
           <p style={{ color: 'var(--ds-color-text-secondary)', margin: 0 }}>
-            Load data files for each resource template (.json, .yaml, .yml or .csv).
+            Load data files for each resource template (.json, .yaml, .yml or .csv), or select a structured product folder.
           </p>
         </div>
-        <button className="primary" type="button" onClick={onNext} disabled={!hasAnyLoaded}>
-          Next: Check & Validate
-        </button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button
+            type="button"
+            onClick={() => {
+              const input = document.createElement('input')
+              input.type = 'file'
+              input.setAttribute('webkitdirectory', '')
+              input.setAttribute('directory', '')
+              input.multiple = true
+              input.onchange = () => {
+                if (input.files) handleStructuredFolder(Array.from(input.files))
+              }
+              input.click()
+            }}
+          >
+            Select Structured Folder
+          </button>
+          <button className="primary" type="button" onClick={onNext} disabled={!hasAnyLoaded}>
+            Next: Check & Validate
+          </button>
+        </div>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>

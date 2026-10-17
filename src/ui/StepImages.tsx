@@ -1,4 +1,10 @@
 import { useRef, useState } from 'react'
+import type { ImportDocument } from '../core/types'
+import {
+  generateRowsFromStructuredProduct,
+  parseStructuredFolder,
+  type StructuredProductFolder,
+} from '../upload/folderStructure'
 import type { ImageLibrary } from '../upload/imageLibrary'
 import { addToLibrary, saveLibrary } from '../upload/imageLibrary'
 
@@ -6,6 +12,7 @@ interface StepImagesProps {
   library: ImageLibrary
   onLibraryChange: (newLibrary: ImageLibrary) => void
   onNext: () => void
+  onAutoConfigure?: (productDoc: ImportDocument, variantDoc?: ImportDocument) => void
 }
 
 function formatSize(bytes: number): string {
@@ -14,20 +21,75 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-export function StepImages({ library, onLibraryChange, onNext }: StepImagesProps) {
+async function getFilesFromDataTransfer(dataTransfer: DataTransfer): Promise<File[]> {
+  const files: File[] = []
+  const items = Array.from(dataTransfer.items || [])
+
+  async function traverseEntry(entry: FileSystemEntry, path = ''): Promise<void> {
+    if (entry.isFile) {
+      const fileEntry = entry as FileSystemFileEntry
+      await new Promise<void>((resolve) => {
+        fileEntry.file(
+          (file) => {
+            const relativePath = path ? `${path}/${file.name}` : file.name
+            Object.defineProperty(file, 'relativePath', { value: relativePath, writable: false })
+            files.push(file)
+            resolve()
+          },
+          () => resolve(),
+        )
+      })
+    } else if (entry.isDirectory) {
+      const dirEntry = entry as FileSystemDirectoryEntry
+      const dirReader = dirEntry.createReader()
+      const entries = await new Promise<FileSystemEntry[]>((resolve) => {
+        dirReader.readEntries(
+          (results) => resolve(Array.from(results)),
+          () => resolve([]),
+        )
+      })
+      const nextPath = path ? `${path}/${entry.name}` : entry.name
+      for (const child of entries) {
+        await traverseEntry(child, nextPath)
+      }
+    }
+  }
+
+  const entries = items
+    .map((item) => (item.webkitGetAsEntry ? item.webkitGetAsEntry() : null))
+    .filter((entry): entry is FileSystemEntry => entry !== null && entry !== undefined)
+
+  if (entries.length > 0) {
+    for (const entry of entries) {
+      await traverseEntry(entry)
+    }
+    return files
+  }
+
+  return Array.from(dataTransfer.files || [])
+}
+
+export function StepImages({ library, onLibraryChange, onNext, onAutoConfigure }: StepImagesProps) {
   const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(null)
   const [failures, setFailures] = useState<{ fileName: string; error: string }[]>([])
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
   const [isDragOver, setIsDragOver] = useState(false)
+  const [detectedProducts, setDetectedProducts] = useState<StructuredProductFolder[]>([])
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const folderInputRef = useRef<HTMLInputElement>(null)
 
-  const handleFiles = async (fileList: FileList | null) => {
-    if (!fileList || fileList.length === 0) return
+  const processFiles = async (files: File[]) => {
+    if (files.length === 0) return
 
-    const files = Array.from(fileList)
     setFailures([])
+
+    // Check if the files match structured folder patterns
+    const parsed = parseStructuredFolder(files)
+    if (parsed.products.length > 0) {
+      setDetectedProducts(parsed.products)
+    }
+
     setUploadProgress({ done: 0, total: files.length })
 
     const updatedLibrary = new Map(library)
@@ -44,6 +106,29 @@ export function StepImages({ library, onLibraryChange, onNext }: StepImagesProps
     setFailures(newFailures)
     setUploadProgress(null)
     onLibraryChange(updatedLibrary)
+  }
+
+  const handleAutoConfigure = (product: StructuredProductFolder) => {
+    if (!onAutoConfigure) return
+
+    const { productRow, variantRows } = generateRowsFromStructuredProduct(product)
+
+    const productDoc: ImportDocument = {
+      template: 'products',
+      version: 1,
+      rows: [productRow],
+    }
+
+    let variantDoc: ImportDocument | undefined
+    if (variantRows.length > 0) {
+      variantDoc = {
+        template: 'variants',
+        version: 1,
+        rows: variantRows,
+      }
+    }
+
+    onAutoConfigure(productDoc, variantDoc)
   }
 
   const handleCopy = (fileName: string) => {
@@ -67,9 +152,9 @@ export function StepImages({ library, onLibraryChange, onNext }: StepImagesProps
     <div className="card">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
         <div>
-          <h2>2. Image Library</h2>
+          <h2>2. Image Library & Folder Uploader</h2>
           <p style={{ color: 'var(--ds-color-text-secondary)', margin: 0 }}>
-            Upload product photos and videos once. Data files refer to them using <code>media:&lt;fileName&gt;</code>.
+            Select folders or files. Folders structured with thumbnail, gallery images and variant subfolders are automatically detected.
           </p>
         </div>
         <button className="primary" type="button" onClick={onNext}>
@@ -84,37 +169,40 @@ export function StepImages({ library, onLibraryChange, onNext }: StepImagesProps
           setIsDragOver(true)
         }}
         onDragLeave={() => setIsDragOver(false)}
-        onDrop={(e) => {
+        onDrop={async (e) => {
           e.preventDefault()
           setIsDragOver(false)
-          handleFiles(e.dataTransfer.files)
+          const files = await getFilesFromDataTransfer(e.dataTransfer)
+          processFiles(files)
         }}
         style={{ marginBottom: '16px' }}
       >
         <p style={{ fontWeight: 600, marginBottom: '8px' }}>
-          Drop images, videos, or whole folders here
+          Select or drop a structured folder (or media files)
         </p>
         <p style={{ color: 'var(--ds-color-text-secondary)', fontSize: 'var(--ds-font-size-small)', marginBottom: '12px' }}>
-          Supports images up to 5 MB, MP4/WebM videos up to 50 MB
+          Structure: <code>folder/&#123;thumbnail.png, images/*.png, variants/var1/images/*.png&#125;</code> (PNG, JPG, WEBP, MP4, etc.)
         </p>
-        <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+        <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
+          <button
+            className="primary"
+            type="button"
+            onClick={() => folderInputRef.current?.click()}
+            disabled={uploadProgress !== null}
+          >
+            Select Structured Folder
+          </button>
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={uploadProgress !== null}
           >
-            Select Files
-          </button>
-          <button
-            type="button"
-            onClick={() => folderInputRef.current?.click()}
-            disabled={uploadProgress !== null}
-          >
-            Select Folder
+            Select Individual Files
           </button>
         </div>
       </div>
 
+      {/* Inputs for folder and file selection */}
       <input
         ref={fileInputRef}
         type="file"
@@ -122,23 +210,25 @@ export function StepImages({ library, onLibraryChange, onNext }: StepImagesProps
         accept="image/*,video/mp4,video/webm"
         style={{ display: 'none' }}
         onChange={(e) => {
-          handleFiles(e.target.files)
+          if (e.target.files) processFiles(Array.from(e.target.files))
           e.target.value = ''
         }}
       />
       <input
         ref={folderInputRef}
         type="file"
-        // @ts-expect-error webkitdirectory is standard in browsers but not typed in React standard input props
+        // @ts-expect-error webkitdirectory is standard in browsers
         webkitdirectory=""
+        directory=""
         multiple
         style={{ display: 'none' }}
         onChange={(e) => {
-          handleFiles(e.target.files)
+          if (e.target.files) processFiles(Array.from(e.target.files))
           e.target.value = ''
         }}
       />
 
+      {/* Upload progress indicator */}
       {uploadProgress && (
         <div style={{ marginBottom: '16px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
@@ -154,6 +244,68 @@ export function StepImages({ library, onLibraryChange, onNext }: StepImagesProps
               className="progress-bar-fill"
               style={{ width: `${(uploadProgress.done / uploadProgress.total) * 100}%` }}
             />
+          </div>
+        </div>
+      )}
+
+      {/* Detected structured product folders banner */}
+      {detectedProducts.length > 0 && (
+        <div
+          style={{
+            background: 'var(--ds-color-surface-muted)',
+            border: '1px solid var(--ds-color-accent)',
+            borderRadius: 'var(--ds-radius-card)',
+            padding: '16px',
+            marginBottom: '16px',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <div>
+              <h3 style={{ margin: 0, color: 'var(--ds-color-accent)' }}>
+                Structured Product Folders Detected ({detectedProducts.length})
+              </h3>
+              <span style={{ fontSize: 'var(--ds-font-size-small)', color: 'var(--ds-color-text-secondary)' }}>
+                We identified thumbnail, gallery images and variant structures in your folder.
+              </span>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {detectedProducts.map((p) => (
+              <div
+                key={p.folderName}
+                style={{
+                  background: 'var(--ds-color-surface)',
+                  border: '1px solid var(--ds-color-border)',
+                  borderRadius: 'var(--ds-radius-inner)',
+                  padding: '12px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: '12px',
+                }}
+              >
+                <div>
+                  <div style={{ fontWeight: 600 }}>{p.name} (slug: <code>{p.slug}</code>)</div>
+                  <div style={{ fontSize: 'var(--ds-font-size-small)', color: 'var(--ds-color-text-secondary)', display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '4px' }}>
+                    <span>🖼️ Thumbnail: <strong>{p.thumbnailFile?.name ?? 'None'}</strong></span>
+                    <span>📸 Gallery: <strong>{p.galleryFiles.length} images</strong></span>
+                    <span>🔀 Variants: <strong>{p.variants.length} ({p.variants.map((v) => v.name).join(', ') || 'None'})</strong></span>
+                  </div>
+                </div>
+
+                {onAutoConfigure && (
+                  <button
+                    className="primary small"
+                    type="button"
+                    onClick={() => handleAutoConfigure(p)}
+                  >
+                    Auto-configure Product & Variants
+                  </button>
+                )}
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -178,7 +330,7 @@ export function StepImages({ library, onLibraryChange, onNext }: StepImagesProps
 
         {imagesList.length === 0 ? (
           <p style={{ color: 'var(--ds-color-text-secondary)', fontSize: 'var(--ds-font-size-small)' }}>
-            No images uploaded yet. Drop some images above or proceed if using remote URLs.
+            No images uploaded yet. Select a structured folder or images above.
           </p>
         ) : (
           <div className="image-grid">

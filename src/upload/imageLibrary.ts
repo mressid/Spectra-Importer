@@ -11,6 +11,7 @@
  */
 import type { LibraryImage } from '../core/types'
 import { uploadFile, type UploadedFile } from './api'
+import { getRelativePath } from './folderStructure'
 
 export type ImageLibrary = Map<string, LibraryImage>
 
@@ -67,15 +68,16 @@ export async function addToLibrary(files: File[], library: ImageLibrary, options
     while (next < files.length && !options.signal?.aborted) {
       const index = next++
       const file = files[index]
-      if (names.has(file.name)) {
-        finish(index, { fileName: file.name, ok: false, error: 'Another file with this name is in the same drop' })
+      const fileKey = getRelativePath(file)
+      if (names.has(fileKey)) {
+        finish(index, { fileName: fileKey, ok: false, error: 'Another file with this name is in the same drop' })
         continue
       }
-      names.add(file.name)
+      names.add(fileKey)
       try {
         const uploaded = await upload(file, file.name)
         const image: LibraryImage = {
-          fileName: file.name,
+          fileName: fileKey,
           url: uploaded.url,
           mediaType: uploaded.mediaType,
           width: uploaded.width,
@@ -84,11 +86,11 @@ export async function addToLibrary(files: File[], library: ImageLibrary, options
           duplicate: uploaded.duplicate,
           uploadedAt: new Date().toISOString(),
         }
-        const replaced = library.has(file.name)
-        library.set(file.name, image)
-        finish(index, { fileName: file.name, ok: true, image, replaced })
+        const replaced = library.has(fileKey)
+        library.set(fileKey, image)
+        finish(index, { fileName: fileKey, ok: true, image, replaced })
       } catch (error) {
-        finish(index, { fileName: file.name, ok: false, error: (error as Error).message })
+        finish(index, { fileName: fileKey, ok: false, error: (error as Error).message })
       }
     }
   }
@@ -99,10 +101,30 @@ export async function addToLibrary(files: File[], library: ImageLibrary, options
 }
 
 /** Names the validator accepts after `media:`. */
-export const libraryNames = (library: ImageLibrary): Set<string> => new Set(library.keys())
+export const libraryNames = (library: ImageLibrary): Set<string> => {
+  const set = new Set<string>()
+  for (const [k] of library) {
+    set.add(k)
+    // Also include basename so either media:images/foo.jpg or media:foo.jpg validates
+    const base = k.split('/').pop()
+    if (base) set.add(base)
+  }
+  return set
+}
 
 /** `media:ring.jpg` -> its url; anything else (a normal address) is returned unchanged. null when the image is not in the library. */
 export function resolveMedia(value: string, library: ImageLibrary): string | null {
   if (!value.startsWith('media:')) return value
-  return library.get(value.slice('media:'.length))?.url ?? null
+  const key = value.slice('media:'.length)
+  const exact = library.get(key)
+  if (exact) return exact.url
+
+  // Check matching by relative path or basename
+  for (const [k, img] of library) {
+    if (k.endsWith(`/${key}`) || k.split('/').pop() === key) {
+      return img.url
+    }
+  }
+
+  return null
 }

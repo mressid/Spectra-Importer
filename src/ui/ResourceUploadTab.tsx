@@ -15,6 +15,7 @@ import {
   ResourceIcon,
 } from './Icons'
 import type { LoadedFile } from './StepFiles'
+import { MarkdownViewer } from './MarkdownViewer'
 
 interface ResourceUploadTabProps {
   kind: ResourceKind
@@ -164,8 +165,17 @@ export function ResourceUploadTab({
         </div>
 
         {showDoc && (
-          <div style={{ marginTop: '16px' }}>
-            <pre>{templateDoc(kind)}</pre>
+          <div
+            style={{
+              marginTop: '16px',
+              padding: '16px',
+              background: 'var(--ds-color-surface-muted)',
+              borderRadius: 'var(--ds-radius-card)',
+              border: '1px solid var(--ds-color-border)',
+              overflowX: 'auto',
+            }}
+          >
+            <MarkdownViewer content={templateDoc(kind)} />
           </div>
         )}
       </div>

@@ -5,6 +5,7 @@ import { RESOURCE_KINDS } from '../core/types'
 import { TEMPLATES } from '../templates'
 import { templateDoc, templateExample } from '../templates/files'
 import { generateRowsFromStructuredProduct, parseStructuredFolder } from '../upload/folderStructure'
+import { MarkdownViewer } from './MarkdownViewer'
 
 export interface LoadedFile {
   name: string
@@ -196,8 +197,17 @@ export function StepFiles({ files, onFilesChange, onNext }: StepFilesProps) {
               </div>
 
               {isDocOpen && (
-                <div style={{ marginBottom: '12px' }}>
-                  <pre>{templateDoc(kind)}</pre>
+                <div
+                  style={{
+                    marginBottom: '12px',
+                    padding: '12px',
+                    background: 'var(--ds-color-surface-muted)',
+                    borderRadius: 'var(--ds-radius-card)',
+                    border: '1px solid var(--ds-color-border)',
+                    overflowX: 'auto',
+                  }}
+                >
+                  <MarkdownViewer content={templateDoc(kind)} />
                 </div>
               )}
 

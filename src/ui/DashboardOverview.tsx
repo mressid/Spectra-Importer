@@ -90,6 +90,9 @@ export function DashboardOverview({
             <button type="button" onClick={() => onSelectTab('media')}>
               <IconUpload size={16} /> Upload Media
             </button>
+            <button type="button" onClick={() => onSelectTab('docs')}>
+              <IconFileText size={16} /> Documentation
+            </button>
           </div>
         </div>
       </div>

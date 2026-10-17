@@ -23,6 +23,7 @@ import {
   IconCheckCircle,
   IconClock,
   IconCopy,
+  IconFileText,
   IconFolderOpen,
   IconLink,
   IconMedia,
@@ -30,6 +31,8 @@ import {
   IconUpload,
   IconVariant,
 } from './Icons'
+import { getMediaLibraryDoc } from './docsData'
+import { MarkdownViewer } from './MarkdownViewer'
 
 interface StepImagesProps {
   library: ImageLibrary
@@ -104,6 +107,8 @@ export function StepImages({ library, onLibraryChange, onNext, onAutoConfigure }
   const [bindingStatuses, setBindingStatuses] = useState<Map<string, MediaBindingStatusDto[]>>(new Map())
   const [isSyncingBindings, setIsSyncingBindings] = useState(false)
   const [bindingSyncSummary, setBindingSyncSummary] = useState<string | null>(null)
+  const [showGuide, setShowGuide] = useState(false)
+  const mediaDoc = useMemo(() => getMediaLibraryDoc(), [])
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const folderInputRef = useRef<HTMLInputElement>(null)
@@ -248,10 +253,49 @@ export function StepImages({ library, onLibraryChange, onNext, onAutoConfigure }
             Upload folders or files. Encodes targets, multi-names (<code>*:[slug-a, slug-b]</code>), roles, path orders, and aspect ratios into media bindings.
           </p>
         </div>
-        <button className="primary" type="button" onClick={onNext}>
-          Next: Choose Files
-        </button>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <button type="button" onClick={() => setShowGuide(!showGuide)} style={{ gap: '6px' }}>
+            <IconFileText size={16} />
+            {showGuide ? 'Hide Folder Guide' : 'Folder Structure Guide'}
+          </button>
+          <button className="primary" type="button" onClick={onNext}>
+            Next: Choose Files
+          </button>
+        </div>
       </div>
+
+      {/* Collapsible Folder Structure & Media Library Guide */}
+      {showGuide && (
+        <div
+          style={{
+            background: 'var(--ds-color-surface-muted)',
+            border: '1px solid var(--ds-color-border)',
+            borderRadius: 'var(--ds-radius-card)',
+            padding: '20px',
+            marginBottom: '20px',
+            maxHeight: '480px',
+            overflowY: 'auto',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <h3 style={{ margin: 0, color: 'var(--ds-color-accent)' }}>
+              Media Library Folder Structure & Binding Specification
+            </h3>
+            <button className="small" type="button" onClick={() => setShowGuide(false)}>
+              Close Guide
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
+            <span className="badge info">Multi-Name Wildcards: *:[slug-a, slug-b]</span>
+            <span className="badge info">Binding Order: *:[slug-a:1, slug-b:3]</span>
+            <span className="badge info">Roles: thumbnail/ | gallery/ | banner/ | logo/</span>
+            <span className="badge info">Aspect Ratios: 1:1/ | 4:5/ | 16:9/</span>
+          </div>
+
+          <MarkdownViewer content={mediaDoc} />
+        </div>
+      )}
 
       <div
         className={`dropzone ${isDragOver ? 'dragover' : ''}`}

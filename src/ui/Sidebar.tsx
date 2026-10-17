@@ -5,6 +5,7 @@ import {
   IconAlertCircle,
   IconCheckCircle,
   IconClock,
+  IconFileText,
   IconLogo,
   IconMedia,
   IconOperations,
@@ -21,6 +22,7 @@ import type { LoadedFile } from './StepFiles'
 export type TabId =
   | 'overview'
   | 'builder'
+  | 'docs'
   | 'tags'
   | 'brands'
   | 'categories'
@@ -291,6 +293,18 @@ export function Sidebar({
         >
           <IconSettings size={18} className="sidebar-icon" />
           <span className="sidebar-item-text" style={{ flex: 1, textAlign: 'left' }}>Store Settings</span>
+        </button>
+
+        <div className="sidebar-section-title">Reference</div>
+
+        <button
+          type="button"
+          className={`sidebar-item ${activeTab === 'docs' ? 'active' : ''}`}
+          onClick={() => onSelectTab('docs')}
+          title="Documentation & Reference Hub"
+        >
+          <IconFileText size={18} className="sidebar-icon" />
+          <span className="sidebar-item-text" style={{ flex: 1, textAlign: 'left' }}>Documentation</span>
         </button>
       </nav>
 

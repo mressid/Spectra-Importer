@@ -21,6 +21,7 @@ import { StepImages } from './StepImages'
 import { StepImport } from './StepImport'
 import { TokenStatusWidget } from './TokenStatusWidget'
 import { GraphBuilder } from './GraphBuilder/GraphBuilder'
+import { DocumentationView } from './DocumentationView'
 
 export function App() {
   const [activeTab, setActiveTab] = useState<TabId>('overview')
@@ -382,6 +383,8 @@ export function App() {
               }}
             />
           )}
+
+          {activeTab === 'docs' && <DocumentationView />}
         </div>
       </main>
     </div>

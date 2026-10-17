@@ -8,7 +8,7 @@ Requirements to run against a real store: the backend of `accessories-store-syst
 (`docker-compose up`, then `./gradlew bootRun` with `SEED_DEMO_DATA=true`; demo admin `admin@store.local` / `admin_password`).
 `npm run dev` serves the tool on :5174 and proxies `/api` to it (`STORE_API_URL` overrides the address).
 
-## 1. `loadStoreIndex` (`src/upload/storeIndex.ts`)
+## 1. `loadStoreIndex` (`src/upload/storeIndex.ts`) — DONE
 Read every page of brands, categories, tags, collections, products (and variants per product when needed) and return
 `Partial<Record<ResourceKind, Map<identifier, storeId>>>`. Use `request()` from `api.ts`.
 Done when: a test with a mocked `fetch` shows pagination is followed; `validateDocument`'s `existing` can be built from it.

@@ -24,7 +24,7 @@ touching the rest.
 | 1 | **Adapter**: text of a file → `ImportDocument` (`{template, version: 1, rows[]}`) | `src/adapters/` | done: json, yaml, csv |
 | 2 | **Template**: schema of a row, identifier, dependencies, references | `src/templates/` | done: tags, brands, categories, collections, products, variants |
 | 3 | **Validate**: identifiers, schema, references, `media:` names against the image library | `src/validate/validate.ts` | done, tested |
-| 4 | **Store index**: what already exists (slug/sku → id) | `src/upload/storeIndex.ts` | TODO |
+| 4 | **Store index**: what already exists (slug/sku → id) | `src/upload/storeIndex.ts` | done, tested |
 | 5 | **Plan**: validated rows → ordered `Operation[]` | `src/upload/plan.ts` | TODO |
 | 6 | **Run**: send the operations, fill ids, report | `src/upload/run.ts` | TODO |
 | 7 | **UI**: 4-step page | `src/ui/` | TODO |

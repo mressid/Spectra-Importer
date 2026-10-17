@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { isLoggedIn, login } from '../upload/api'
+import { isLoggedIn, login, logout } from '../upload/api'
+import { TokenStatusWidget } from './TokenStatusWidget'
 
 interface StepConnectProps {
   onConnected: (email: string) => void
@@ -29,26 +30,37 @@ export function StepConnect({ onConnected }: StepConnectProps) {
     }
   }
 
-  return (
-    <div className="card">
-      <h2>1. Connect to Store</h2>
-      <p style={{ color: 'var(--ds-color-text-secondary)' }}>
-        Authenticate with the store backend. In local development, calls to <code>/api</code> are proxied to the store API.
-      </p>
+  const handleLogout = () => {
+    logout()
+    setConnectedUser(null)
+  }
 
-      {connectedUser ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div className="badge success" style={{ alignSelf: 'flex-start' }}>
-            Connected as {connectedUser}
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <div className="card">
+        <h2>1. Connect to Store</h2>
+        <p style={{ color: 'var(--ds-color-text-secondary)' }}>
+          Authenticate with the store backend. In local development, calls to <code>/api</code> are proxied to the store API.
+        </p>
+
+        {connectedUser ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div className="badge success">
+                Connected as {connectedUser}
+              </div>
+              <button className="small danger" type="button" onClick={handleLogout}>
+                Disconnect
+              </button>
+            </div>
+            <p>You are authenticated and ready to manage imports.</p>
+            <div>
+              <button className="primary" type="button" onClick={() => onConnected(connectedUser)}>
+                Go to Dashboard Overview
+              </button>
+            </div>
           </div>
-          <p>You are authenticated and ready to manage imports.</p>
-          <div>
-            <button className="primary" type="button" onClick={() => onConnected(connectedUser)}>
-              Continue to Images
-            </button>
-          </div>
-        </div>
-      ) : (
+        ) : (
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxWidth: '400px' }}>
           {error && (
             <div className="badge error" style={{ padding: '8px 12px' }}>
@@ -84,6 +96,17 @@ export function StepConnect({ onConnected }: StepConnectProps) {
             </button>
           </div>
         </form>
+      )}
+      </div>
+
+      {connectedUser && (
+        <TokenStatusWidget
+          connectedUser={connectedUser}
+          onAuthChange={(newEmail) => {
+            setConnectedUser(newEmail)
+            if (newEmail) onConnected(newEmail)
+          }}
+        />
       )}
     </div>
   )

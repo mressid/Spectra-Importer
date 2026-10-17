@@ -19,6 +19,7 @@ import { StepConnect } from './StepConnect'
 import type { LoadedFile } from './StepFiles'
 import { StepImages } from './StepImages'
 import { StepImport } from './StepImport'
+import { TokenStatusWidget } from './TokenStatusWidget'
 
 export function App() {
   const [activeTab, setActiveTab] = useState<TabId>('overview')
@@ -147,6 +148,15 @@ export function App() {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <TokenStatusWidget
+              compact
+              connectedUser={connectedUser}
+              onAuthChange={(email) => {
+                setConnectedUser(email)
+                if (email) refreshStoreIndex()
+              }}
+            />
+
             {loadedFilesCount > 0 && (
               <button
                 className="small primary"
@@ -203,6 +213,10 @@ export function App() {
               isRunning={isRunning}
               onSelectTab={setActiveTab}
               onRunImport={handleRunFullImport}
+              onAuthChange={(email) => {
+                setConnectedUser(email)
+                if (email) refreshStoreIndex()
+              }}
             />
           )}
 

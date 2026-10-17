@@ -15,6 +15,7 @@ import {
 } from './Icons'
 import type { LoadedFile } from './StepFiles'
 import type { TabId } from './Sidebar'
+import { TokenStatusWidget } from './TokenStatusWidget'
 
 interface DashboardOverviewProps {
   files: Partial<Record<ResourceKind, LoadedFile>>
@@ -25,6 +26,7 @@ interface DashboardOverviewProps {
   isRunning: boolean
   onSelectTab: (tab: TabId) => void
   onRunImport: () => void
+  onAuthChange?: (email: string | null) => void
 }
 
 export function DashboardOverview({
@@ -36,6 +38,7 @@ export function DashboardOverview({
   isRunning,
   onSelectTab,
   onRunImport,
+  onAuthChange,
 }: DashboardOverviewProps) {
   let totalRows = 0
   let filesLoadedCount = 0
@@ -90,6 +93,12 @@ export function DashboardOverview({
           </div>
         </div>
       </div>
+
+      {/* Token Health & Auto-Refresh Controls */}
+      <TokenStatusWidget
+        connectedUser={connectedUser}
+        onAuthChange={onAuthChange}
+      />
 
       {/* KPI Cards */}
       <div className="stats-grid">

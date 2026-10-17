@@ -379,6 +379,15 @@ export function IconUnlink({ size = 16, ...props }: IconProps) {
   )
 }
 
+export function IconEye({ size = 16, ...props }: IconProps) {
+  return (
+    <svg width={size} height={size} {...defaultProps} {...props}>
+      <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  )
+}
+
 export function ResourceIcon({ kind, size = 18, ...props }: IconProps & { kind: ResourceKind }) {
   switch (kind) {
     case 'tags':

@@ -239,9 +239,41 @@ export function NodeCard({
           )}
 
           {node.type === 'media' && (
-            <span className="badge info">
-              {node.data.role === 'thumbnail' ? 'Thumbnail' : 'Gallery'}
-            </span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', width: '100%' }}>
+              {node.data.url && (
+                <div
+                  style={{
+                    width: '100%',
+                    height: '64px',
+                    borderRadius: 'var(--ds-radius-inner)',
+                    overflow: 'hidden',
+                    background: 'var(--ds-color-surface-muted)',
+                    border: '1px solid var(--ds-color-border)',
+                  }}
+                >
+                  <img
+                    src={node.data.url}
+                    alt={node.data.fileName}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover',
+                      display: 'block',
+                    }}
+                  />
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: '4px' }}>
+                <span className="badge info">
+                  {node.data.role === 'thumbnail' ? 'Thumbnail' : 'Gallery'}
+                </span>
+                {node.data.mediaType && (
+                  <span className="badge">
+                    {node.data.mediaType}
+                  </span>
+                )}
+              </div>
+            </div>
           )}
 
           {node.type === 'brand' && node.data.country && (

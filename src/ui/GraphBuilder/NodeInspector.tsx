@@ -418,6 +418,35 @@ export function NodeInspector({
         {/* Media-specific fields */}
         {node.type === 'media' && (
           <>
+            {/* Visual Media Preview */}
+            {node.data.url && (
+              <div
+                style={{
+                  width: '100%',
+                  height: '140px',
+                  borderRadius: 'var(--ds-radius-card)',
+                  overflow: 'hidden',
+                  background: 'var(--ds-color-surface-muted)',
+                  border: '1px solid var(--ds-color-border)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginBottom: '8px',
+                }}
+              >
+                <img
+                  src={node.data.url}
+                  alt={node.data.fileName}
+                  style={{
+                    maxWidth: '100%',
+                    maxHeight: '100%',
+                    objectFit: 'contain',
+                    display: 'block',
+                  }}
+                />
+              </div>
+            )}
+
             <div>
               <label style={{ display: 'block', fontSize: 'var(--ds-font-size-caption)', fontWeight: 600, marginBottom: '4px' }}>
                 File Name
@@ -426,6 +455,19 @@ export function NodeInspector({
                 type="text"
                 value={String(node.data.fileName ?? '')}
                 onChange={(e) => handleFieldChange('fileName', e.target.value)}
+                style={{ width: '100%' }}
+              />
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: 'var(--ds-font-size-caption)', fontWeight: 600, marginBottom: '4px' }}>
+                Image URL (Preview)
+              </label>
+              <input
+                type="url"
+                value={String(node.data.url ?? '')}
+                onChange={(e) => handleFieldChange('url', e.target.value)}
+                placeholder="https://... or auto-filled from library"
                 style={{ width: '100%' }}
               />
             </div>

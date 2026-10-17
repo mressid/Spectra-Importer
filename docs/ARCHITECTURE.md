@@ -25,10 +25,10 @@ touching the rest.
 | 2 | **Template**: schema of a row, identifier, dependencies, references | `src/templates/` | done: tags, brands, categories, collections, products, variants |
 | 3 | **Validate**: identifiers, schema, references, `media:` names against the image library | `src/validate/validate.ts` | done, tested |
 | 4 | **Store index**: what already exists (slug/sku → id) | `src/upload/storeIndex.ts` | done, tested |
-| 5 | **Plan**: validated rows → ordered `Operation[]` | `src/upload/plan.ts` | TODO |
-| 6 | **Run**: send the operations, fill ids, report | `src/upload/run.ts` | TODO |
-| 7 | **UI**: 4-step page | `src/ui/` | TODO |
-| – | **Image library**: upload images, keep name → url | `src/upload/imageLibrary.ts` | done (logic, tested); its screen is TODO |
+| 5 | **Plan**: validated rows → ordered `Operation[]` | `src/upload/plan.ts` | done, tested |
+| 6 | **Run**: send the operations, fill ids, report | `src/upload/run.ts` | done, tested |
+| 7 | **UI**: 5-step page | `src/ui/` | done |
+| – | **Image library**: upload images, keep name → url | `src/upload/imageLibrary.ts` | done (logic, tested, screen done) |
 | – | API client (login, JSON request, file upload) | `src/upload/api.ts` | done |
 
 ## The rules that matter

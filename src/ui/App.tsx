@@ -1,27 +1,148 @@
-/**
- * TODO (docs/TASKS.md #4-#7): the screen. One page, five steps, state kept in a single reducer:
- *   1. Connect   - store address (default: same origin), email + password -> login() from upload/api.ts
- *   2. Images    - the image library (upload/imageLibrary.ts): drop images / a folder (<input webkitdirectory>), each is
- *                  uploaded at once, listed with thumbnail, size and the exact `media:<fileName>` text to copy; remove, re-upload
- *   3. Choose    - per template: drop a .json/.yaml/.csv file, download an example, read its doc
- *                  (templateExample / templateDoc)
- *   4. Check     - validateDocument() for every file, list Issue[] grouped by file and row, fix-and-reload;
- *                  "import valid rows only" vs "stop on any error"; conflict mode skip | update
- *   5. Import    - buildPlan() + runPlan(), live progress list, failures with the store's message, download the RunReport as JSON
- */
-import { RESOURCE_KINDS } from '../core/types'
-import { TEMPLATES } from '../templates'
+import { useCallback, useState } from 'react'
+import type { ConflictMode, ResourceKind } from '../core/types'
+import { isLoggedIn } from '../upload/api'
+import type { ImageLibrary } from '../upload/imageLibrary'
+import { loadLibrary } from '../upload/imageLibrary'
+import type { PlanInput } from '../upload/plan'
+import { loadStoreIndex } from '../upload/storeIndex'
+import { StepCheck } from './StepCheck'
+import { StepConnect } from './StepConnect'
+import type { LoadedFile } from './StepFiles'
+import { StepFiles } from './StepFiles'
+import { StepImages } from './StepImages'
+import { StepImport } from './StepImport'
+
+export type StepId = 'connect' | 'images' | 'files' | 'check' | 'import'
 
 export function App() {
+  const [currentStep, setCurrentStep] = useState<StepId>('connect')
+  const [connectedUser, setConnectedUser] = useState<string | null>(
+    isLoggedIn() ? 'admin@store.local' : null,
+  )
+
+  const [library, setLibrary] = useState<ImageLibrary>(() => loadLibrary())
+  const [files, setFiles] = useState<Partial<Record<ResourceKind, LoadedFile>>>({})
+  const [storeIndex, setStoreIndex] = useState<Partial<Record<ResourceKind, Map<string, string>>>>({})
+  const [storeIndexLoading, setStoreIndexLoading] = useState(false)
+
+  const [conflictMode, setConflictMode] = useState<ConflictMode>('skip')
+  const [importOnlyValid, setImportOnlyValid] = useState(true)
+  const [planInputs, setPlanInputs] = useState<PlanInput[]>([])
+
+  const refreshStoreIndex = useCallback(async () => {
+    setStoreIndexLoading(true)
+    try {
+      const idx = await loadStoreIndex()
+      setStoreIndex(idx)
+    } catch {
+      // Failed to load index (e.g. backend offline or unauthorized)
+    } finally {
+      setStoreIndexLoading(false)
+    }
+  }, [])
+
+  const initialStoreIds = Object.fromEntries(
+    Object.entries(storeIndex).flatMap(([k, map]) => {
+      if (!map) return []
+      return Array.from(map.entries()).map(([id, storeId]) => [`${k}:${id}`, storeId])
+    }),
+  )
+
+  const steps: { id: StepId; label: string }[] = [
+    { id: 'connect', label: '1. Connect' },
+    { id: 'images', label: '2. Images' },
+    { id: 'files', label: '3. Choose Files' },
+    { id: 'check', label: '4. Check' },
+    { id: 'import', label: '5. Import' },
+  ]
+
   return (
-    <main style={{ maxWidth: 720, margin: '40px auto', padding: '0 16px' }}>
-      <h1>Store importer</h1>
-      <p>Bulk upload of catalogue data from JSON, YAML or CSV. The screen is not built yet: see docs/TASKS.md.</p>
-      <ol>
-        {RESOURCE_KINDS.map((kind) => (
-          <li key={kind}>{TEMPLATES[kind].title}</li>
-        ))}
-      </ol>
+    <main style={{ maxWidth: '960px', margin: '32px auto', padding: '0 16px' }}>
+      <header style={{ marginBottom: '24px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <h1>Store Importer</h1>
+            <p style={{ color: 'var(--ds-color-text-secondary)', margin: 0 }}>
+              Bulk upload catalogue data (tags, brands, categories, collections, products, variants) from JSON, YAML or CSV.
+            </p>
+          </div>
+          {connectedUser && (
+            <span className="badge success">
+              ● {connectedUser}
+            </span>
+          )}
+        </div>
+      </header>
+
+      {/* Step Navigation Bar */}
+      <nav className="step-nav" aria-label="Import Steps">
+        {steps.map((s) => {
+          const isActive = currentStep === s.id
+          return (
+            <button
+              key={s.id}
+              type="button"
+              className={isActive ? 'active' : ''}
+              onClick={() => setCurrentStep(s.id)}
+            >
+              {s.label}
+            </button>
+          )
+        })}
+      </nav>
+
+      {/* Active Step Content */}
+      {currentStep === 'connect' && (
+        <StepConnect
+          onConnected={(email) => {
+            setConnectedUser(email)
+            setCurrentStep('images')
+            refreshStoreIndex()
+          }}
+        />
+      )}
+
+      {currentStep === 'images' && (
+        <StepImages
+          library={library}
+          onLibraryChange={(newLib) => setLibrary(newLib)}
+          onNext={() => setCurrentStep('files')}
+        />
+      )}
+
+      {currentStep === 'files' && (
+        <StepFiles
+          files={files}
+          onFilesChange={(newFiles) => setFiles(newFiles)}
+          onNext={() => setCurrentStep('check')}
+        />
+      )}
+
+      {currentStep === 'check' && (
+        <StepCheck
+          files={files}
+          library={library}
+          storeIndex={storeIndex}
+          storeIndexLoading={storeIndexLoading}
+          onRefreshStoreIndex={refreshStoreIndex}
+          conflictMode={conflictMode}
+          setConflictMode={setConflictMode}
+          importOnlyValid={importOnlyValid}
+          setImportOnlyValid={setImportOnlyValid}
+          onProceed={(inputs) => {
+            setPlanInputs(inputs)
+            setCurrentStep('import')
+          }}
+        />
+      )}
+
+      {currentStep === 'import' && (
+        <StepImport
+          inputs={planInputs}
+          initialStoreIds={initialStoreIds}
+          onBack={() => setCurrentStep('check')}
+        />
+      )}
     </main>
   )
 }

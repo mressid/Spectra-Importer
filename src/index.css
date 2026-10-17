@@ -1,5 +1,10 @@
-/* Look and feel come from the shared design tokens (--ds-*); never write a colour or radius here.
+/* Look and feel come from the shared design tokens (--ds-*); never write a colour, radius or font size literal.
    Reference: accessories-store-system/design-tokens/README.md and admin/DESIGN.md */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
 body {
   margin: 0;
   background: var(--ds-color-canvas);
@@ -9,11 +14,41 @@ body {
   line-height: 1.5;
 }
 
-h1 { font-size: var(--ds-font-size-title); font-weight: 600; letter-spacing: -0.01em; }
-a { color: var(--ds-color-primary); }
+h1 {
+  font-size: var(--ds-font-size-title);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0 0 8px;
+}
+
+h2 {
+  font-size: var(--ds-font-size-title);
+  font-weight: 600;
+  margin: 0 0 8px;
+}
+
+h3 {
+  font-size: var(--ds-font-size-base);
+  font-weight: 600;
+  margin: 0 0 6px;
+}
+
+p {
+  margin: 0 0 12px;
+}
+
+a {
+  color: var(--ds-color-primary);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
 
 button {
-  font: inherit;
+  font-family: inherit;
+  font-size: var(--ds-font-size-base);
   font-weight: 500;
   padding: 8px 16px;
   border-radius: var(--ds-radius-inner);
@@ -21,15 +56,229 @@ button {
   background: var(--ds-color-surface);
   color: var(--ds-color-text-primary);
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: background var(--ds-motion-fast), border-color var(--ds-motion-fast);
 }
-button.primary { background: var(--ds-color-primary); border-color: var(--ds-color-primary); color: var(--ds-color-on-primary); }
-button:hover { background: var(--ds-color-surface-muted); }
-button.primary:hover { background: var(--ds-color-primary); filter: brightness(1.08); }
 
-/* flat card: hairline border, no shadow */
+button:hover:not(:disabled) {
+  background: var(--ds-color-surface-muted);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+button.primary {
+  background: var(--ds-color-primary);
+  border-color: var(--ds-color-primary);
+  color: var(--ds-color-on-primary);
+}
+
+button.primary:hover:not(:disabled) {
+  background: var(--ds-color-primary);
+  filter: brightness(1.08);
+}
+
+button.danger {
+  background: var(--ds-color-surface);
+  border-color: var(--ds-color-error);
+  color: var(--ds-color-error);
+}
+
+button.danger:hover:not(:disabled) {
+  background: var(--ds-color-surface-muted);
+}
+
+button.small {
+  padding: 4px 8px;
+  font-size: var(--ds-font-size-small);
+  border-radius: var(--ds-radius-chip);
+}
+
+input[type="text"],
+input[type="email"],
+input[type="password"] {
+  font-family: inherit;
+  font-size: var(--ds-font-size-base);
+  padding: 8px 12px;
+  border-radius: var(--ds-radius-inner);
+  border: 1px solid var(--ds-color-border);
+  background: var(--ds-color-surface);
+  color: var(--ds-color-text-primary);
+  width: 100%;
+}
+
+input:focus {
+  outline: none;
+  border-color: var(--ds-color-primary);
+}
+
+label {
+  display: block;
+  font-size: var(--ds-font-size-small);
+  font-weight: 500;
+  color: var(--ds-color-text-secondary);
+  margin-bottom: 4px;
+}
+
 .card {
   background: var(--ds-color-surface);
   border: 1px solid var(--ds-color-border);
   border-radius: var(--ds-radius-card);
   padding: var(--ds-space-card);
+  margin-bottom: 16px;
+}
+
+.dropzone {
+  border: 2px dashed var(--ds-color-border);
+  border-radius: var(--ds-radius-card);
+  padding: var(--ds-space-card);
+  text-align: center;
+  background: var(--ds-color-surface);
+  cursor: pointer;
+  transition: border-color var(--ds-motion-fast), background var(--ds-motion-fast);
+}
+
+.dropzone:hover,
+.dropzone.dragover {
+  border-color: var(--ds-color-primary);
+  background: var(--ds-color-surface-muted);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--ds-radius-chip);
+  font-size: var(--ds-font-size-caption);
+  font-weight: 500;
+  border: 1px solid var(--ds-color-border);
+}
+
+.badge.success {
+  background: var(--ds-color-surface-muted);
+  color: var(--ds-color-accent);
+  border-color: var(--ds-color-accent);
+}
+
+.badge.warning {
+  background: var(--ds-color-surface-muted);
+  color: var(--ds-color-warning);
+  border-color: var(--ds-color-warning);
+}
+
+.badge.error {
+  background: var(--ds-color-surface-muted);
+  color: var(--ds-color-error);
+  border-color: var(--ds-color-error);
+}
+
+.badge.info {
+  background: var(--ds-color-surface-muted);
+  color: var(--ds-color-info);
+  border-color: var(--ds-color-info);
+}
+
+.step-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--ds-color-border);
+  padding-bottom: 12px;
+}
+
+.step-nav button {
+  background: transparent;
+  border: none;
+  font-size: var(--ds-font-size-small);
+  color: var(--ds-color-text-secondary);
+  padding: 6px 12px;
+  border-radius: var(--ds-radius-chip);
+}
+
+.step-nav button.active {
+  background: var(--ds-color-surface);
+  color: var(--ds-color-primary);
+  font-weight: 600;
+  border: 1px solid var(--ds-color-border);
+}
+
+.step-nav button.completed {
+  color: var(--ds-color-text-primary);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--ds-font-size-small);
+}
+
+th, td {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--ds-color-border);
+}
+
+th {
+  color: var(--ds-color-text-secondary);
+  font-weight: 500;
+  font-size: var(--ds-font-size-caption);
+}
+
+tr:hover td {
+  background: var(--ds-color-surface-muted);
+}
+
+.progress-bar-track {
+  width: 100%;
+  height: 8px;
+  background: var(--ds-color-surface-muted);
+  border-radius: var(--ds-radius-chip);
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: var(--ds-color-primary);
+  transition: width var(--ds-motion-fast);
+}
+
+.image-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.image-card {
+  background: var(--ds-color-surface);
+  border: 1px solid var(--ds-color-border);
+  border-radius: var(--ds-radius-card);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.image-card img {
+  width: 100%;
+  height: 120px;
+  object-fit: cover;
+  border-radius: var(--ds-radius-inner);
+  background: var(--ds-color-surface-muted);
+}
+
+pre {
+  background: var(--ds-color-surface-muted);
+  border: 1px solid var(--ds-color-border);
+  border-radius: var(--ds-radius-inner);
+  padding: 12px;
+  font-size: var(--ds-font-size-caption);
+  overflow-x: auto;
 }

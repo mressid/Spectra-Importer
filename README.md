@@ -35,6 +35,6 @@ src/core/types.ts       the contracts between stages
 src/adapters/           json, yaml, csv  →  ImportDocument
 src/templates/          zod schema per resource, shared field helpers, registry
 src/validate/           identifiers, schema, references, image names
-src/upload/             API client + image library + store index (done), plan / run (TODO)
-src/ui/                 the screen (TODO)
+src/upload/             API client + image library + store index + plan + run (done)
+src/ui/                 the screen (done)
 ```

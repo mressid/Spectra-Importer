@@ -3,6 +3,15 @@ import type { OperationResult, RunReport } from '../core/types'
 import type { PlanInput } from '../upload/plan'
 import { buildPlan } from '../upload/plan'
 import { runPlan } from '../upload/run'
+import {
+  IconAlertCircle,
+  IconCheckCircle,
+  IconClock,
+  IconClose,
+  IconFileText,
+  IconPlay,
+  IconXCircle,
+} from './Icons'
 
 interface StepImportProps {
   inputs: PlanInput[]
@@ -100,16 +109,19 @@ export function StepImport({ inputs, initialStoreIds, onBack, onProgress, onRunn
           </button>
           {!isRunning && !report && (
             <button className="primary" type="button" onClick={handleStart} disabled={plan.length === 0}>
+              <IconPlay size={16} />
               Start Import
             </button>
           )}
           {isRunning && (
             <button className="danger" type="button" onClick={handleCancel}>
+              <IconClose size={16} />
               Cancel Import
             </button>
           )}
           {report && (
             <button className="primary" type="button" onClick={() => downloadReport(report)}>
+              <IconFileText size={16} />
               Download Report (JSON)
             </button>
           )}
@@ -179,15 +191,28 @@ export function StepImport({ inputs, initialStoreIds, onBack, onProgress, onRunn
                 const status = result?.status ?? 'pending'
 
                 let badgeClass = ''
-                if (status === 'created' || status === 'updated') badgeClass = 'success'
-                else if (status === 'failed') badgeClass = 'error'
-                else if (status === 'blocked' || status === 'pending') badgeClass = 'warning'
-                else if (status === 'running') badgeClass = 'info'
+                let StatusIcon = IconClock
+                if (status === 'created' || status === 'updated') {
+                  badgeClass = 'success'
+                  StatusIcon = IconCheckCircle
+                } else if (status === 'failed') {
+                  badgeClass = 'error'
+                  StatusIcon = IconXCircle
+                } else if (status === 'blocked') {
+                  badgeClass = 'warning'
+                  StatusIcon = IconAlertCircle
+                } else if (status === 'running') {
+                  badgeClass = 'info'
+                  StatusIcon = IconClock
+                }
 
                 return (
                   <tr key={op.key}>
                     <td>
-                      <span className={`badge ${badgeClass}`}>{status}</span>
+                      <span className={`badge ${badgeClass}`} style={{ gap: '4px' }}>
+                        <StatusIcon size={12} />
+                        {status}
+                      </span>
                     </td>
                     <td style={{ fontWeight: 500 }}>{op.label}</td>
                     <td>

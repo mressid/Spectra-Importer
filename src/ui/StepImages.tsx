@@ -7,6 +7,15 @@ import {
 } from '../upload/folderStructure'
 import type { ImageLibrary } from '../upload/imageLibrary'
 import { addToLibrary, saveLibrary } from '../upload/imageLibrary'
+import {
+  IconCamera,
+  IconCopy,
+  IconFolderOpen,
+  IconMedia,
+  IconTrash,
+  IconUpload,
+  IconVariant,
+} from './Icons'
 
 interface StepImagesProps {
   library: ImageLibrary
@@ -190,6 +199,7 @@ export function StepImages({ library, onLibraryChange, onNext, onAutoConfigure }
             onClick={() => folderInputRef.current?.click()}
             disabled={uploadProgress !== null}
           >
+            <IconFolderOpen size={16} />
             Select Structured Folder
           </button>
           <button
@@ -197,6 +207,7 @@ export function StepImages({ library, onLibraryChange, onNext, onAutoConfigure }
             onClick={() => fileInputRef.current?.click()}
             disabled={uploadProgress !== null}
           >
+            <IconUpload size={16} />
             Select Individual Files
           </button>
         </div>
@@ -288,10 +299,19 @@ export function StepImages({ library, onLibraryChange, onNext, onAutoConfigure }
               >
                 <div>
                   <div style={{ fontWeight: 600 }}>{p.name} (slug: <code>{p.slug}</code>)</div>
-                  <div style={{ fontSize: 'var(--ds-font-size-small)', color: 'var(--ds-color-text-secondary)', display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '4px' }}>
-                    <span>🖼️ Thumbnail: <strong>{p.thumbnailFile?.name ?? 'None'}</strong></span>
-                    <span>📸 Gallery: <strong>{p.galleryFiles.length} images</strong></span>
-                    <span>🔀 Variants: <strong>{p.variants.length} ({p.variants.map((v) => v.name).join(', ') || 'None'})</strong></span>
+                  <div style={{ fontSize: 'var(--ds-font-size-small)', color: 'var(--ds-color-text-secondary)', display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '4px', alignItems: 'center' }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                      <IconMedia size={14} />
+                      Thumbnail: <strong>{p.thumbnailFile?.name ?? 'None'}</strong>
+                    </span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                      <IconCamera size={14} />
+                      Gallery: <strong>{p.galleryFiles.length} images</strong>
+                    </span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                      <IconVariant size={14} />
+                      Variants: <strong>{p.variants.length} ({p.variants.map((v) => v.name).join(', ') || 'None'})</strong>
+                    </span>
                   </div>
                 </div>
 
@@ -375,18 +395,20 @@ export function StepImages({ library, onLibraryChange, onNext, onAutoConfigure }
                   <button
                     className="small"
                     type="button"
-                    style={{ flex: 1 }}
+                    style={{ flex: 1, gap: '4px' }}
                     onClick={() => handleCopy(img.fileName)}
                   >
+                    <IconCopy size={13} />
                     {copiedKey === img.fileName ? 'Copied!' : 'Copy media:name'}
                   </button>
                   <button
                     className="small danger"
                     type="button"
                     title="Remove from local library"
+                    aria-label="Remove image"
                     onClick={() => handleRemove(img.fileName)}
                   >
-                    ✕
+                    <IconTrash size={13} />
                   </button>
                 </div>
               </div>

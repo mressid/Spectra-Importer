@@ -10,6 +10,7 @@ import { loadStoreIndex, storeIndexToExisting } from '../upload/storeIndex'
 import type { ValidationContext, ValidationResult } from '../validate/validate'
 import { validateDocument } from '../validate/validate'
 import { DashboardOverview } from './DashboardOverview'
+import { IconChevronRight, IconPlay, IconSettings } from './Icons'
 import { ResourceUploadTab } from './ResourceUploadTab'
 import type { TabId } from './Sidebar'
 import { Sidebar } from './Sidebar'
@@ -139,7 +140,7 @@ export function App() {
             <span style={{ fontSize: 'var(--ds-font-size-small)', color: 'var(--ds-color-text-secondary)' }}>
               Store Importer
             </span>
-            <span style={{ color: 'var(--ds-color-text-secondary)' }}>/</span>
+            <IconChevronRight size={14} style={{ color: 'var(--ds-color-text-secondary)' }} />
             <strong style={{ fontSize: 'var(--ds-font-size-base)', textTransform: 'capitalize' }}>
               {activeTab}
             </strong>
@@ -152,7 +153,9 @@ export function App() {
                 type="button"
                 onClick={handleRunFullImport}
                 disabled={isRunning}
+                style={{ gap: '6px' }}
               >
+                <IconPlay size={13} />
                 Run Import ({loadedFilesCount} files ready)
               </button>
             )}
@@ -162,15 +165,26 @@ export function App() {
                 className="small"
                 type="button"
                 onClick={() => setActiveTab('connect')}
+                style={{ gap: '6px' }}
               >
-                ● {connectedUser}
+                <span
+                  style={{
+                    width: '6px',
+                    height: '6px',
+                    borderRadius: 'var(--ds-radius-chip)',
+                    background: 'var(--ds-color-accent)',
+                  }}
+                />
+                {connectedUser}
               </button>
             ) : (
               <button
                 className="small primary"
                 type="button"
                 onClick={() => setActiveTab('connect')}
+                style={{ gap: '6px' }}
               >
+                <IconSettings size={13} />
                 Connect Store
               </button>
             )}

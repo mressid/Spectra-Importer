@@ -1,6 +1,18 @@
 import type { OperationResult, ResourceKind } from '../core/types'
 import { RESOURCE_KINDS } from '../core/types'
 import { TEMPLATES } from '../templates'
+import {
+  IconAlertCircle,
+  IconCheckCircle,
+  IconClock,
+  IconLogo,
+  IconMedia,
+  IconOperations,
+  IconOverview,
+  IconSettings,
+  IconXCircle,
+  ResourceIcon,
+} from './Icons'
 import type { LoadedFile } from './StepFiles'
 
 export type TabId =
@@ -24,15 +36,6 @@ interface SidebarProps {
   operationResults: OperationResult[]
   totalOperations: number
   isRunning: boolean
-}
-
-const RESOURCE_ICONS: Record<ResourceKind, string> = {
-  tags: '🏷️',
-  brands: '🏢',
-  categories: '📁',
-  collections: '📦',
-  products: '🛍️',
-  variants: '🔀',
 }
 
 export function Sidebar({
@@ -64,8 +67,22 @@ export function Sidebar({
     <aside className="dashboard-sidebar">
       {/* Brand header */}
       <div className="sidebar-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: 'var(--ds-font-size-title)' }}>⚡</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '32px',
+              height: '32px',
+              borderRadius: 'var(--ds-radius-inner)',
+              background: 'var(--ds-color-surface-muted)',
+              border: '1px solid var(--ds-color-border)',
+              color: 'var(--ds-color-primary)',
+            }}
+          >
+            <IconLogo size={18} />
+          </div>
           <div>
             <div style={{ fontWeight: 600, fontSize: 'var(--ds-font-size-base)', lineHeight: 1.2 }}>
               Store Importer
@@ -76,12 +93,20 @@ export function Sidebar({
           </div>
         </div>
 
-        <div style={{ marginTop: '8px' }}>
+        <div style={{ marginTop: '10px' }}>
           <span
             className={`badge ${connectedUser ? 'success' : 'warning'}`}
-            style={{ width: '100%', justifyContent: 'flex-start' }}
+            style={{ width: '100%', justifyContent: 'flex-start', padding: '4px 8px' }}
           >
-            {connectedUser ? `● ${connectedUser.split('@')[0]}` : '○ Offline'}
+            <span
+              style={{
+                width: '6px',
+                height: '6px',
+                borderRadius: 'var(--ds-radius-chip)',
+                background: connectedUser ? 'var(--ds-color-accent)' : 'var(--ds-color-warning)',
+              }}
+            />
+            {connectedUser ? connectedUser.split('@')[0] : 'Offline'}
           </span>
         </div>
       </div>
@@ -95,7 +120,7 @@ export function Sidebar({
           className={`sidebar-item ${activeTab === 'overview' ? 'active' : ''}`}
           onClick={() => onSelectTab('overview')}
         >
-          <span className="sidebar-icon">📊</span>
+          <IconOverview size={18} className="sidebar-icon" />
           <span style={{ flex: 1, textAlign: 'left' }}>Overview</span>
         </button>
 
@@ -104,7 +129,7 @@ export function Sidebar({
           className={`sidebar-item ${activeTab === 'media' ? 'active' : ''}`}
           onClick={() => onSelectTab('media')}
         >
-          <span className="sidebar-icon">🖼️</span>
+          <IconMedia size={18} className="sidebar-icon" />
           <span style={{ flex: 1, textAlign: 'left' }}>Image Library</span>
           {imageCount > 0 && <span className="badge info">{imageCount}</span>}
         </button>
@@ -117,7 +142,6 @@ export function Sidebar({
           const hasError = Boolean(loaded?.error)
           const rowCount = loaded?.document?.rows.length ?? 0
           const isActive = activeTab === kind
-
           return (
             <button
               key={kind}
@@ -125,7 +149,7 @@ export function Sidebar({
               className={`sidebar-item ${isActive ? 'active' : ''}`}
               onClick={() => onSelectTab(kind as TabId)}
             >
-              <span className="sidebar-icon">{RESOURCE_ICONS[kind]}</span>
+              <ResourceIcon kind={kind} size={18} className="sidebar-icon" />
               <span style={{ flex: 1, textAlign: 'left' }}>{tmpl.title}</span>
               {hasError ? (
                 <span className="badge error">!</span>
@@ -143,7 +167,7 @@ export function Sidebar({
           className={`sidebar-item ${activeTab === 'operations' ? 'active' : ''}`}
           onClick={() => onSelectTab('operations')}
         >
-          <span className="sidebar-icon">⚡</span>
+          <IconOperations size={18} className="sidebar-icon" />
           <span style={{ flex: 1, textAlign: 'left' }}>Operations</span>
           {isRunning ? (
             <span className="badge warning">running</span>
@@ -159,14 +183,14 @@ export function Sidebar({
           className={`sidebar-item ${activeTab === 'connect' ? 'active' : ''}`}
           onClick={() => onSelectTab('connect')}
         >
-          <span className="sidebar-icon">⚙️</span>
+          <IconSettings size={18} className="sidebar-icon" />
           <span style={{ flex: 1, textAlign: 'left' }}>Store Settings</span>
         </button>
       </nav>
 
       {/* Operations Brief Widget */}
       <div className="sidebar-brief">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
           <span style={{ fontWeight: 600, fontSize: 'var(--ds-font-size-caption)' }}>
             Operations Brief
           </span>
@@ -174,33 +198,48 @@ export function Sidebar({
         </div>
 
         {hasOperations ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--ds-font-size-caption)' }}>
-              <span style={{ color: 'var(--ds-color-text-secondary)' }}>Ongoing:</span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 'var(--ds-font-size-caption)' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--ds-color-text-secondary)' }}>
+                <IconClock size={13} style={{ color: 'var(--ds-color-info)' }} />
+                Ongoing
+              </span>
               <strong style={{ color: running > 0 ? 'var(--ds-color-info)' : 'var(--ds-color-text-primary)' }}>
                 {running}
               </strong>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--ds-font-size-caption)' }}>
-              <span style={{ color: 'var(--ds-color-text-secondary)' }}>Completed:</span>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 'var(--ds-font-size-caption)' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--ds-color-text-secondary)' }}>
+                <IconCheckCircle size={13} style={{ color: 'var(--ds-color-accent)' }} />
+                Completed
+              </span>
               <strong style={{ color: 'var(--ds-color-accent)' }}>{created}</strong>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--ds-font-size-caption)' }}>
-              <span style={{ color: 'var(--ds-color-text-secondary)' }}>Failed:</span>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 'var(--ds-font-size-caption)' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--ds-color-text-secondary)' }}>
+                <IconXCircle size={13} style={{ color: 'var(--ds-color-error)' }} />
+                Failed
+              </span>
               <strong style={{ color: failed > 0 ? 'var(--ds-color-error)' : 'var(--ds-color-text-secondary)' }}>
                 {failed}
               </strong>
             </div>
+
             {blocked > 0 && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--ds-font-size-caption)' }}>
-                <span style={{ color: 'var(--ds-color-text-secondary)' }}>Blocked:</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 'var(--ds-font-size-caption)' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--ds-color-text-secondary)' }}>
+                  <IconAlertCircle size={13} style={{ color: 'var(--ds-color-warning)' }} />
+                  Blocked
+                </span>
                 <strong style={{ color: 'var(--ds-color-warning)' }}>{blocked}</strong>
               </div>
             )}
           </div>
         ) : (
           <div style={{ fontSize: 'var(--ds-font-size-caption)', color: 'var(--ds-color-text-secondary)' }}>
-            No active operations. Load files to begin.
+            No active operations. Select a resource to upload data.
           </div>
         )}
       </div>

@@ -5,6 +5,15 @@ import { TEMPLATES } from '../templates'
 import { templateDoc, templateExample } from '../templates/files'
 import { generateRowsFromStructuredProduct, parseStructuredFolder } from '../upload/folderStructure'
 import type { ValidationResult } from '../validate/validate'
+import {
+  IconAlertCircle,
+  IconCheckCircle,
+  IconFileText,
+  IconFolderOpen,
+  IconTrash,
+  IconUpload,
+  ResourceIcon,
+} from './Icons'
 import type { LoadedFile } from './StepFiles'
 
 interface ResourceUploadTabProps {
@@ -109,20 +118,38 @@ export function ResourceUploadTab({
       {/* Header Card */}
       <div className="card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px' }}>
-          <div>
-            <h2>{template.title} Upload</h2>
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '4px' }}>
-              <span className="badge info">Endpoint: {template.endpoint}</span>
-              <span className="badge">ID: {template.idField}</span>
-              {template.dependsOn.length > 0 && (
-                <span className="badge warning">Depends on: {template.dependsOn.join(', ')}</span>
-              )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '40px',
+                height: '40px',
+                borderRadius: 'var(--ds-radius-inner)',
+                background: 'var(--ds-color-surface-muted)',
+                border: '1px solid var(--ds-color-border)',
+                color: 'var(--ds-color-primary)',
+              }}
+            >
+              <ResourceIcon kind={kind} size={22} />
+            </div>
+            <div>
+              <h2 style={{ margin: 0 }}>{template.title} Upload</h2>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '6px' }}>
+                <span className="badge info">Endpoint: {template.endpoint}</span>
+                <span className="badge">ID: {template.idField}</span>
+                {template.dependsOn.length > 0 && (
+                  <span className="badge warning">Depends on: {template.dependsOn.join(', ')}</span>
+                )}
+              </div>
             </div>
           </div>
 
           <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
             <button className="small" type="button" onClick={() => setShowDoc(!showDoc)}>
-              {showDoc ? 'Hide Guide' : 'View Documentation'}
+              <IconFileText size={13} />
+              {showDoc ? 'Hide Guide' : 'Documentation'}
             </button>
             <button className="small" type="button" onClick={() => downloadExample(kind, 'csv')}>
               CSV Example
@@ -159,12 +186,28 @@ export function ResourceUploadTab({
               const dropped = e.dataTransfer.files[0]
               if (dropped) handleFileDrop(dropped)
             }}
-            style={{ padding: '32px' }}
+            style={{ padding: '36px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}
           >
-            <p style={{ fontWeight: 600, fontSize: 'var(--ds-font-size-base)', marginBottom: '8px' }}>
-              Drop {template.title} file here
+            <div
+              style={{
+                width: '48px',
+                height: '48px',
+                borderRadius: 'var(--ds-radius-card)',
+                background: 'var(--ds-color-surface-muted)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'var(--ds-color-primary)',
+                marginBottom: '12px',
+              }}
+            >
+              <IconUpload size={24} />
+            </div>
+
+            <p style={{ fontWeight: 600, fontSize: 'var(--ds-font-size-base)', margin: '0 0 4px' }}>
+              Drop {template.title} data file here
             </p>
-            <p style={{ color: 'var(--ds-color-text-secondary)', fontSize: 'var(--ds-font-size-small)', marginBottom: '16px' }}>
+            <p style={{ color: 'var(--ds-color-text-secondary)', fontSize: 'var(--ds-font-size-small)', margin: '0 0 16px' }}>
               Accepted formats: .csv, .json, .yaml, .yml
             </p>
 
@@ -183,6 +226,7 @@ export function ResourceUploadTab({
                   input.click()
                 }}
               >
+                <IconUpload size={16} />
                 Choose {template.title} File
               </button>
 
@@ -201,6 +245,7 @@ export function ResourceUploadTab({
                     input.click()
                   }}
                 >
+                  <IconFolderOpen size={16} />
                   Choose Structured Folder
                 </button>
               )}
@@ -209,6 +254,7 @@ export function ResourceUploadTab({
 
           {file?.error && (
             <div className="badge error" style={{ width: '100%', marginTop: '12px', padding: '12px' }}>
+              <IconAlertCircle size={16} />
               {file.error}
             </div>
           )}
@@ -216,9 +262,12 @@ export function ResourceUploadTab({
       ) : (
         /* Loaded File Inspection Card */
         <div className="card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <span style={{ fontWeight: 600, fontSize: 'var(--ds-font-size-base)' }}>{file.name}</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <IconFileText size={20} style={{ color: 'var(--ds-color-primary)' }} />
+                <span style={{ fontWeight: 600, fontSize: 'var(--ds-font-size-base)' }}>{file.name}</span>
+              </div>
               <span className="badge success">{rows.length} rows loaded</span>
               {validationResult && (
                 <span className={`badge ${validationResult.ok ? 'success' : 'error'}`}>
@@ -230,9 +279,11 @@ export function ResourceUploadTab({
 
             <div style={{ display: 'flex', gap: '8px' }}>
               <button type="button" onClick={onGoToValidate}>
+                <IconCheckCircle size={15} />
                 Validate & Check All
               </button>
               <button className="danger small" type="button" onClick={() => onFileChange(undefined)}>
+                <IconTrash size={14} />
                 Remove File
               </button>
             </div>
@@ -241,7 +292,8 @@ export function ResourceUploadTab({
           {/* Validation Issues for this Resource */}
           {validationResult && validationResult.issues.length > 0 && (
             <div style={{ marginBottom: '16px', border: '1px solid var(--ds-color-border)', borderRadius: 'var(--ds-radius-inner)', overflow: 'hidden' }}>
-              <div style={{ background: 'var(--ds-color-surface-muted)', padding: '8px 12px', fontWeight: 600, fontSize: 'var(--ds-font-size-small)' }}>
+              <div style={{ background: 'var(--ds-color-surface-muted)', padding: '8px 12px', fontWeight: 600, fontSize: 'var(--ds-font-size-small)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <IconAlertCircle size={16} style={{ color: 'var(--ds-color-error)' }} />
                 Issues Detected ({validationResult.issues.length})
               </div>
               <table>

@@ -9,18 +9,19 @@ file (json | yaml | csv) → adapter → JSON rows → validation → upload to 
 * Every row has an identifier (`slug`, `sku` or `key`); rows refer to each other with it.
 * Images and videos are uploaded once in an image uploader; the tool keeps a library (file name → store URL) and data files
   refer to them as `media:<fileName>`.
+* **Media Library & Folder Importer**: Supports directory structure upload with wildcard multi-entity bindings (`*:[slug-a, slug-b]`), individual path-bound orders, aspect ratio classification (`1:1`, `4:5`, `16:9`), and store binding synchronization (`PUT /api/v1/admin/media/bindings`); see [docs/MEDIA_LIBRARY.md](docs/MEDIA_LIBRARY.md).
 * Ready-made templates with documentation for each resource live in [`templates/`](templates): media, tags, brands,
   categories, collections, products, variants (no media file: images go through the uploader).
 
 ## Status
-The reading, template, validation and image-library logic are done and tested. Planning, uploading and the screen are the next steps:
-see [docs/TASKS.md](docs/TASKS.md). Design and rules: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+The entire pipeline (reading, templates, validation, media library & folder upload, store planning, execution, and visual Graph Builder canvas) is implemented and tested.
+See [docs/TASKS.md](docs/TASKS.md). Design and rules: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/MEDIA_LIBRARY.md](docs/MEDIA_LIBRARY.md).
 
 ## Run
 ```bash
 npm install
 npm run dev      # http://localhost:5174, /api proxied to http://localhost:8080 (STORE_API_URL to change)
-npm test         # adapters, validation, every shipped example
+npm test         # adapters, validation, media folder parser, every shipped example
 npm run build
 ```
 
@@ -30,12 +31,13 @@ After cloning, `npm install` links them (the store repository must sit next to t
 
 ## Layout
 ```
+docs/MEDIA_LIBRARY.md   media library folder structure upload & binding guide
 templates/<resource>/   README.md (the column documentation) + example .json .yaml .csv
 src/core/types.ts       the contracts between stages
 src/adapters/           json, yaml, csv  →  ImportDocument
 src/templates/          zod schema per resource, shared field helpers, registry
 src/validate/           identifiers, schema, references, image names
-src/upload/             API client + image library + store index + plan + run (done)
-src/graph/              graph builder model, bundler & presets (done)
-src/ui/                 the screen and workflow graph canvas (done)
+src/upload/             API client + image library + media folder parser + plan + run
+src/graph/              graph builder model, bundler & presets
+src/ui/                 5-step import screen + workflow graph canvas
 ```

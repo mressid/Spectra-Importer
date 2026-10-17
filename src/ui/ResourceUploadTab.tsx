@@ -138,7 +138,7 @@ export function ResourceUploadTab({
             <div>
               <h2 style={{ margin: 0 }}>{template.title} Upload</h2>
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '6px' }}>
-                <span className="badge info">Endpoint: {template.endpoint}</span>
+                <span className="badge">Endpoint: {template.endpoint}</span>
                 <span className="badge">ID: {template.idField}</span>
                 {template.dependsOn.length > 0 && (
                   <span className="badge warning">Depends on: {template.dependsOn.join(', ')}</span>
@@ -278,7 +278,7 @@ export function ResourceUploadTab({
                 <IconFileText size={20} style={{ color: 'var(--ds-color-primary)' }} />
                 <span style={{ fontWeight: 600, fontSize: 'var(--ds-font-size-base)' }}>{file.name}</span>
               </div>
-              <span className="badge success">{rows.length} rows loaded</span>
+              <span className="badge">{rows.length} rows loaded</span>
               {validationResult && (
                 <span className={`badge ${validationResult.ok ? 'success' : 'error'}`}>
                   {validationResult.clean.length} valid

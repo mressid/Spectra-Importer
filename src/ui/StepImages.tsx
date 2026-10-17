@@ -287,10 +287,10 @@ export function StepImages({ library, onLibraryChange, onNext, onAutoConfigure }
           </div>
 
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
-            <span className="badge info">Multi-Name Wildcards: *:[slug-a, slug-b]</span>
-            <span className="badge info">Binding Order: *:[slug-a:1, slug-b:3]</span>
-            <span className="badge info">Roles: thumbnail/ | gallery/ | banner/ | logo/</span>
-            <span className="badge info">Aspect Ratios: 1:1/ | 4:5/ | 16:9/</span>
+            <span className="badge">Multi-Name: *:[slug-a, slug-b]</span>
+            <span className="badge">Order: *:[slug-a:1, slug-b:3]</span>
+            <span className="badge">Roles: thumbnail | gallery | banner | logo</span>
+            <span className="badge">Aspect Ratios: 1:1 | 4:5 | 16:9</span>
           </div>
 
           <MarkdownViewer content={mediaDoc} />
@@ -426,7 +426,7 @@ export function StepImages({ library, onLibraryChange, onNext, onAutoConfigure }
           {/* Badges overview */}
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '12px' }}>
             {Object.entries(mediaFolderResult.targetSummary).map(([target, count]) => (
-              <span key={target} className="badge info">
+              <span key={target} className="badge">
                 {target}: {count} {count === 1 ? 'binding' : 'bindings'}
               </span>
             ))}
@@ -478,7 +478,7 @@ export function StepImages({ library, onLibraryChange, onNext, onAutoConfigure }
                     </div>
                     <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
                       {asset.explicitAspectRatio && (
-                        <span className="badge info">{asset.explicitAspectRatio}</span>
+                        <span className="badge">{asset.explicitAspectRatio}</span>
                       )}
                       {asset.detectedAltText && (
                         <span style={{ fontSize: 'var(--ds-font-size-caption)', color: 'var(--ds-color-text-secondary)' }}>
@@ -654,12 +654,12 @@ export function StepImages({ library, onLibraryChange, onNext, onAutoConfigure }
                         </span>
                       )}
                       {ratio && (
-                        <span className="badge info" title={`Aspect ratio: ${ratio.formatted} (${ratio.orientation})`}>
+                        <span className="badge" title={`Aspect ratio: ${ratio.formatted} (${ratio.orientation})`}>
                           {ratio.formatted}
                         </span>
                       )}
                       {img.duplicate && (
-                        <span className="badge info">already in store</span>
+                        <span className="badge">already in store</span>
                       )}
                     </div>
 

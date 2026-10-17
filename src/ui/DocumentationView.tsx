@@ -216,7 +216,7 @@ export function DocumentationView({ initialArticleId = 'media-library' }: Docume
               >
                 <div>
                   <span
-                    className="badge info"
+                    className="badge"
                     style={{ marginBottom: '6px', fontSize: 'var(--ds-font-size-caption)' }}
                   >
                     {CATEGORY_LABELS[currentArticle.category]}

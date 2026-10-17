@@ -183,35 +183,40 @@ label {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 2px 8px;
+  padding: 1px 6px;
   border-radius: var(--ds-radius-chip);
   font-size: var(--ds-font-size-caption);
   font-weight: 500;
+  line-height: 1.4;
+  background: var(--ds-color-surface-muted);
+  color: var(--ds-color-text-secondary);
   border: 1px solid var(--ds-color-border);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
 }
 
 .badge.success {
   background: var(--ds-color-surface-muted);
   color: var(--ds-color-accent);
-  border-color: var(--ds-color-accent);
+  border-color: var(--ds-color-border);
 }
 
 .badge.warning {
   background: var(--ds-color-surface-muted);
   color: var(--ds-color-warning);
-  border-color: var(--ds-color-warning);
+  border-color: var(--ds-color-border);
 }
 
 .badge.error {
   background: var(--ds-color-surface-muted);
   color: var(--ds-color-error);
-  border-color: var(--ds-color-error);
+  border-color: var(--ds-color-border);
 }
 
 .badge.info {
   background: var(--ds-color-surface-muted);
   color: var(--ds-color-info);
-  border-color: var(--ds-color-info);
+  border-color: var(--ds-color-border);
 }
 
 .step-nav {

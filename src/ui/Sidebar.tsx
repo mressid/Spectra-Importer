@@ -202,10 +202,8 @@ export function Sidebar({
           <IconWorkflow size={18} className="sidebar-icon" />
           <span className="sidebar-item-text" style={{ flex: 1, textAlign: 'left' }}>Graph Builder</span>
           <span
-            className="badge"
+            className="badge success"
             style={{
-              background: 'var(--ds-color-accent)',
-              color: 'var(--ds-color-on-accent)',
               fontWeight: 600,
               padding: '1px 5px',
             }}
@@ -223,7 +221,7 @@ export function Sidebar({
         >
           <IconMedia size={18} className="sidebar-icon" />
           <span className="sidebar-item-text" style={{ flex: 1, textAlign: 'left' }}>Image Library</span>
-          {imageCount > 0 && <span className="badge info">{imageCount}</span>}
+          {imageCount > 0 && <span className="badge">{imageCount}</span>}
           {collapsed && imageCount > 0 && <span className="sidebar-badge-dot info" />}
         </button>
 
@@ -248,7 +246,7 @@ export function Sidebar({
               {hasError ? (
                 <span className="badge error">!</span>
               ) : rowCount > 0 ? (
-                <span className="badge success">{rowCount}</span>
+                <span className="badge">{rowCount}</span>
               ) : null}
               {collapsed && (hasError ? (
                 <span className="sidebar-badge-dot error" />
@@ -274,7 +272,7 @@ export function Sidebar({
           ) : failed > 0 ? (
             <span className="badge error">{failed} err</span>
           ) : totalOperations > 0 ? (
-            <span className="badge info">{totalOperations}</span>
+            <span className="badge">{totalOperations}</span>
           ) : null}
           {collapsed && (isRunning ? (
             <span className="sidebar-badge-dot warning" />

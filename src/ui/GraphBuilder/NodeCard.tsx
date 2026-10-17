@@ -141,7 +141,7 @@ export function NodeCard({
           </span>
           {isAuto && (
             <span
-              className="badge info"
+              className="badge"
               style={{ padding: '1px 5px', fontSize: 'var(--ds-font-size-caption)' }}
               title="Auto-created in plan via create: prefix"
             >
@@ -220,18 +220,18 @@ export function NodeCard({
           {node.type === 'product' && (
             <>
               {node.data.price !== undefined && (
-                <span className="badge success">{node.data.price} TND</span>
+                <span className="badge">{node.data.price} TND</span>
               )}
               {node.data.sku && (
                 <span className="badge">{node.data.sku}</span>
               )}
-              {node.data.hasVariants && <span className="badge info">Variants</span>}
+              {node.data.hasVariants && <span className="badge">Variants</span>}
             </>
           )}
 
           {node.type === 'variant' && (
             <>
-              <span className="badge success">{node.data.price} TND</span>
+              <span className="badge">{node.data.price} TND</span>
               {node.data.stockQuantity !== undefined && (
                 <span className="badge">Stock: {node.data.stockQuantity}</span>
               )}
@@ -264,7 +264,7 @@ export function NodeCard({
                 </div>
               )}
               <div style={{ display: 'flex', gap: '4px' }}>
-                <span className="badge info">
+                <span className="badge">
                   {node.data.role === 'thumbnail' ? 'Thumbnail' : 'Gallery'}
                 </span>
                 {node.data.mediaType && (

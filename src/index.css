@@ -1,0 +1,35 @@
+/* Look and feel come from the shared design tokens (--ds-*); never write a colour or radius here.
+   Reference: accessories-store-system/design-tokens/README.md and admin/DESIGN.md */
+body {
+  margin: 0;
+  background: var(--ds-color-canvas);
+  color: var(--ds-color-text-primary);
+  font-family: var(--ds-font-family);
+  font-size: var(--ds-font-size-base);
+  line-height: 1.5;
+}
+
+h1 { font-size: var(--ds-font-size-title); font-weight: 600; letter-spacing: -0.01em; }
+a { color: var(--ds-color-primary); }
+
+button {
+  font: inherit;
+  font-weight: 500;
+  padding: 8px 16px;
+  border-radius: var(--ds-radius-inner);
+  border: 1px solid var(--ds-color-border);
+  background: var(--ds-color-surface);
+  color: var(--ds-color-text-primary);
+  cursor: pointer;
+}
+button.primary { background: var(--ds-color-primary); border-color: var(--ds-color-primary); color: var(--ds-color-on-primary); }
+button:hover { background: var(--ds-color-surface-muted); }
+button.primary:hover { background: var(--ds-color-primary); filter: brightness(1.08); }
+
+/* flat card: hairline border, no shadow */
+.card {
+  background: var(--ds-color-surface);
+  border: 1px solid var(--ds-color-border);
+  border-radius: var(--ds-radius-card);
+  padding: var(--ds-space-card);
+}

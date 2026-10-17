@@ -1,21 +1,26 @@
-import { useCallback, useState } from 'react'
-import type { ConflictMode, ResourceKind } from '../core/types'
+import { useCallback, useMemo, useState } from 'react'
+import type { ConflictMode, OperationResult, ResourceKind } from '../core/types'
+import { RESOURCE_KINDS } from '../core/types'
+import { TEMPLATES } from '../templates'
 import { isLoggedIn } from '../upload/api'
 import type { ImageLibrary } from '../upload/imageLibrary'
-import { loadLibrary } from '../upload/imageLibrary'
+import { libraryNames, loadLibrary } from '../upload/imageLibrary'
 import type { PlanInput } from '../upload/plan'
-import { loadStoreIndex } from '../upload/storeIndex'
+import { loadStoreIndex, storeIndexToExisting } from '../upload/storeIndex'
+import type { ValidationContext, ValidationResult } from '../validate/validate'
+import { validateDocument } from '../validate/validate'
+import { DashboardOverview } from './DashboardOverview'
+import { ResourceUploadTab } from './ResourceUploadTab'
+import type { TabId } from './Sidebar'
+import { Sidebar } from './Sidebar'
 import { StepCheck } from './StepCheck'
 import { StepConnect } from './StepConnect'
 import type { LoadedFile } from './StepFiles'
-import { StepFiles } from './StepFiles'
 import { StepImages } from './StepImages'
 import { StepImport } from './StepImport'
 
-export type StepId = 'connect' | 'images' | 'files' | 'check' | 'import'
-
 export function App() {
-  const [currentStep, setCurrentStep] = useState<StepId>('connect')
+  const [activeTab, setActiveTab] = useState<TabId>('overview')
   const [connectedUser, setConnectedUser] = useState<string | null>(
     isLoggedIn() ? 'admin@store.local' : null,
   )
@@ -28,6 +33,8 @@ export function App() {
   const [conflictMode, setConflictMode] = useState<ConflictMode>('skip')
   const [importOnlyValid, setImportOnlyValid] = useState(true)
   const [planInputs, setPlanInputs] = useState<PlanInput[]>([])
+  const [operationResults, setOperationResults] = useState<OperationResult[]>([])
+  const [isRunning, setIsRunning] = useState(false)
 
   const refreshStoreIndex = useCallback(async () => {
     setStoreIndexLoading(true)
@@ -35,131 +42,246 @@ export function App() {
       const idx = await loadStoreIndex()
       setStoreIndex(idx)
     } catch {
-      // Failed to load index (e.g. backend offline or unauthorized)
+      // Offline or unauthenticated
     } finally {
       setStoreIndexLoading(false)
     }
   }, [])
 
-  const initialStoreIds = Object.fromEntries(
-    Object.entries(storeIndex).flatMap(([k, map]) => {
-      if (!map) return []
-      return Array.from(map.entries()).map(([id, storeId]) => [`${k}:${id}`, storeId])
-    }),
-  )
+  // Validation results across all loaded files
+  const validationResults = useMemo(() => {
+    const results: Partial<Record<ResourceKind, ValidationResult>> = {}
+    const pending: Partial<Record<ResourceKind, Set<string>>> = {}
 
-  const steps: { id: StepId; label: string }[] = [
-    { id: 'connect', label: '1. Connect' },
-    { id: 'images', label: '2. Images' },
-    { id: 'files', label: '3. Choose Files' },
-    { id: 'check', label: '4. Check' },
-    { id: 'import', label: '5. Import' },
-  ]
+    for (const [k, f] of Object.entries(files)) {
+      const kind = k as ResourceKind
+      if (f?.document) {
+        const tmpl = TEMPLATES[kind]
+        pending[kind] = new Set(
+          f.document.rows.map((r) => String(r[tmpl.idField] ?? '').trim()).filter(Boolean),
+        )
+      }
+    }
+
+    const context: ValidationContext = {
+      pending,
+      existing: storeIndexToExisting(storeIndex),
+      images: libraryNames(library),
+    }
+
+    for (const [k, f] of Object.entries(files)) {
+      const kind = k as ResourceKind
+      if (f?.document) {
+        results[kind] = validateDocument(f.document, context)
+      }
+    }
+
+    return results
+  }, [files, library, storeIndex])
+
+  const initialStoreIds = useMemo(() => {
+    const map: Record<string, string> = {}
+    for (const [k, storeMap] of Object.entries(storeIndex)) {
+      if (storeMap) {
+        for (const [id, storeId] of storeMap) {
+          map[`${k}:${id}`] = storeId
+        }
+      }
+    }
+    return map
+  }, [storeIndex])
+
+  const handleRunFullImport = () => {
+    const inputs: PlanInput[] = []
+    for (const [k, res] of Object.entries(validationResults)) {
+      const kind = k as ResourceKind
+      if (res && res.clean.length > 0) {
+        inputs.push({
+          template: kind,
+          rows: res.clean,
+          onConflict: conflictMode,
+          library,
+        })
+      }
+    }
+
+    if (inputs.length > 0) {
+      setPlanInputs(inputs)
+      setActiveTab('operations')
+    }
+  }
+
+  const isResourceTab = (tab: TabId): tab is ResourceKind => {
+    return RESOURCE_KINDS.includes(tab as ResourceKind)
+  }
+
+  const loadedFilesCount = Object.values(files).filter((f) => f && f.document).length
 
   return (
-    <main style={{ maxWidth: '960px', margin: '32px auto', padding: '0 16px' }}>
-      <header style={{ marginBottom: '24px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <h1>Store Importer</h1>
-            <p style={{ color: 'var(--ds-color-text-secondary)', margin: 0 }}>
-              Bulk upload catalogue data (tags, brands, categories, collections, products, variants) from JSON, YAML or CSV.
-            </p>
-          </div>
-          {connectedUser && (
-            <span className="badge success">
-              ● {connectedUser}
+    <div className="dashboard-layout">
+      {/* Sidebar with Navigation Tabs & Operations Brief */}
+      <Sidebar
+        activeTab={activeTab}
+        onSelectTab={setActiveTab}
+        connectedUser={connectedUser}
+        imageCount={library.size}
+        files={files}
+        operationResults={operationResults}
+        totalOperations={planInputs.reduce((acc, p) => acc + p.rows.length, 0)}
+        isRunning={isRunning}
+      />
+
+      {/* Main Dashboard Content */}
+      <main className="dashboard-main">
+        {/* Topbar Header */}
+        <header className="dashboard-topbar">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: 'var(--ds-font-size-small)', color: 'var(--ds-color-text-secondary)' }}>
+              Store Importer
             </span>
+            <span style={{ color: 'var(--ds-color-text-secondary)' }}>/</span>
+            <strong style={{ fontSize: 'var(--ds-font-size-base)', textTransform: 'capitalize' }}>
+              {activeTab}
+            </strong>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            {loadedFilesCount > 0 && (
+              <button
+                className="small primary"
+                type="button"
+                onClick={handleRunFullImport}
+                disabled={isRunning}
+              >
+                Run Import ({loadedFilesCount} files ready)
+              </button>
+            )}
+
+            {connectedUser ? (
+              <button
+                className="small"
+                type="button"
+                onClick={() => setActiveTab('connect')}
+              >
+                ● {connectedUser}
+              </button>
+            ) : (
+              <button
+                className="small primary"
+                type="button"
+                onClick={() => setActiveTab('connect')}
+              >
+                Connect Store
+              </button>
+            )}
+          </div>
+        </header>
+
+        {/* Tab Content Area */}
+        <div className="dashboard-content">
+          {activeTab === 'overview' && (
+            <DashboardOverview
+              files={files}
+              imageCount={library.size}
+              connectedUser={connectedUser}
+              operationResults={operationResults}
+              totalOperations={planInputs.reduce((acc, p) => acc + p.rows.length, 0)}
+              isRunning={isRunning}
+              onSelectTab={setActiveTab}
+              onRunImport={handleRunFullImport}
+            />
+          )}
+
+          {activeTab === 'media' && (
+            <StepImages
+              library={library}
+              onLibraryChange={setLibrary}
+              onNext={() => setActiveTab('products')}
+              onAutoConfigure={(productDoc, variantDoc) => {
+                const updated = { ...files }
+                updated.products = {
+                  name: `${String(productDoc.rows[0].slug)}.json`,
+                  text: JSON.stringify(productDoc.rows),
+                  document: productDoc,
+                }
+                if (variantDoc) {
+                  updated.variants = {
+                    name: `${String(productDoc.rows[0].slug)}-variants.json`,
+                    text: JSON.stringify(variantDoc.rows),
+                    document: variantDoc,
+                  }
+                }
+                setFiles(updated)
+                setActiveTab('products')
+              }}
+            />
+          )}
+
+          {isResourceTab(activeTab) && (
+            <ResourceUploadTab
+              kind={activeTab}
+              file={files[activeTab]}
+              onFileChange={(newFile) => {
+                const updated = { ...files }
+                if (newFile) updated[activeTab] = newFile
+                else delete updated[activeTab]
+                setFiles(updated)
+              }}
+              onAutoConfigureOther={(otherKind, doc) => {
+                setFiles((prev) => ({
+                  ...prev,
+                  [otherKind]: {
+                    name: `${doc.template}-generated.json`,
+                    text: JSON.stringify(doc.rows),
+                    document: doc,
+                  },
+                }))
+              }}
+              validationResult={validationResults[activeTab]}
+              onGoToValidate={() => setActiveTab('operations')}
+            />
+          )}
+
+          {activeTab === 'operations' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <StepCheck
+                files={files}
+                library={library}
+                storeIndex={storeIndex}
+                storeIndexLoading={storeIndexLoading}
+                onRefreshStoreIndex={refreshStoreIndex}
+                conflictMode={conflictMode}
+                setConflictMode={setConflictMode}
+                importOnlyValid={importOnlyValid}
+                setImportOnlyValid={setImportOnlyValid}
+                onProceed={(inputs) => {
+                  setPlanInputs(inputs)
+                }}
+              />
+
+              {planInputs.length > 0 && (
+                <StepImport
+                  inputs={planInputs}
+                  initialStoreIds={initialStoreIds}
+                  onBack={() => setActiveTab('overview')}
+                  onProgress={setOperationResults}
+                  onRunningChange={setIsRunning}
+                />
+              )}
+            </div>
+          )}
+
+          {activeTab === 'connect' && (
+            <StepConnect
+              onConnected={(email) => {
+                setConnectedUser(email)
+                refreshStoreIndex()
+                setActiveTab('overview')
+              }}
+            />
           )}
         </div>
-      </header>
-
-      {/* Step Navigation Bar */}
-      <nav className="step-nav" aria-label="Import Steps">
-        {steps.map((s) => {
-          const isActive = currentStep === s.id
-          return (
-            <button
-              key={s.id}
-              type="button"
-              className={isActive ? 'active' : ''}
-              onClick={() => setCurrentStep(s.id)}
-            >
-              {s.label}
-            </button>
-          )
-        })}
-      </nav>
-
-      {/* Active Step Content */}
-      {currentStep === 'connect' && (
-        <StepConnect
-          onConnected={(email) => {
-            setConnectedUser(email)
-            setCurrentStep('images')
-            refreshStoreIndex()
-          }}
-        />
-      )}
-
-      {currentStep === 'images' && (
-        <StepImages
-          library={library}
-          onLibraryChange={(newLib) => setLibrary(newLib)}
-          onNext={() => setCurrentStep('files')}
-          onAutoConfigure={(productDoc, variantDoc) => {
-            const updated = { ...files }
-            updated.products = {
-              name: `${String(productDoc.rows[0].slug)}.json`,
-              text: JSON.stringify(productDoc.rows),
-              document: productDoc,
-            }
-            if (variantDoc) {
-              updated.variants = {
-                name: `${String(productDoc.rows[0].slug)}-variants.json`,
-                text: JSON.stringify(variantDoc.rows),
-                document: variantDoc,
-              }
-            }
-            setFiles(updated)
-            setCurrentStep('check')
-          }}
-        />
-      )}
-
-      {currentStep === 'files' && (
-        <StepFiles
-          files={files}
-          onFilesChange={(newFiles) => setFiles(newFiles)}
-          onNext={() => setCurrentStep('check')}
-        />
-      )}
-
-      {currentStep === 'check' && (
-        <StepCheck
-          files={files}
-          library={library}
-          storeIndex={storeIndex}
-          storeIndexLoading={storeIndexLoading}
-          onRefreshStoreIndex={refreshStoreIndex}
-          conflictMode={conflictMode}
-          setConflictMode={setConflictMode}
-          importOnlyValid={importOnlyValid}
-          setImportOnlyValid={setImportOnlyValid}
-          onProceed={(inputs) => {
-            setPlanInputs(inputs)
-            setCurrentStep('import')
-          }}
-        />
-      )}
-
-      {currentStep === 'import' && (
-        <StepImport
-          inputs={planInputs}
-          initialStoreIds={initialStoreIds}
-          onBack={() => setCurrentStep('check')}
-        />
-      )}
-    </main>
+      </main>
+    </div>
   )
 }

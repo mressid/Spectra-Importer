@@ -8,6 +8,8 @@ interface StepImportProps {
   inputs: PlanInput[]
   initialStoreIds?: Partial<Record<string, string>>
   onBack: () => void
+  onProgress?: (results: OperationResult[]) => void
+  onRunningChange?: (running: boolean) => void
 }
 
 function downloadReport(report: RunReport) {
@@ -21,7 +23,7 @@ function downloadReport(report: RunReport) {
   URL.revokeObjectURL(url)
 }
 
-export function StepImport({ inputs, initialStoreIds, onBack }: StepImportProps) {
+export function StepImport({ inputs, initialStoreIds, onBack, onProgress, onRunningChange }: StepImportProps) {
   const plan = useMemo(() => buildPlan(inputs), [inputs])
 
   const [isRunning, setIsRunning] = useState(false)
@@ -31,6 +33,7 @@ export function StepImport({ inputs, initialStoreIds, onBack }: StepImportProps)
 
   const handleStart = async () => {
     setIsRunning(true)
+    onRunningChange?.(true)
     setReport(null)
     const controller = new AbortController()
     abortControllerRef.current = controller
@@ -40,11 +43,15 @@ export function StepImport({ inputs, initialStoreIds, onBack }: StepImportProps)
         signal: controller.signal,
         initialStoreIds,
         conflictMode: inputs[0]?.onConflict ?? 'skip',
-        onProgress: (live) => setResults([...live]),
+        onProgress: (live) => {
+          setResults([...live])
+          onProgress?.(live)
+        },
       })
       setReport(res)
     } finally {
       setIsRunning(false)
+      onRunningChange?.(false)
       abortControllerRef.current = null
     }
   }

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ConflictMode, OperationResult, ResourceKind } from '../core/types'
 import { RESOURCE_KINDS } from '../core/types'
 import { TEMPLATES } from '../templates'
@@ -10,7 +10,7 @@ import { loadStoreIndex, storeIndexToExisting } from '../upload/storeIndex'
 import type { ValidationContext, ValidationResult } from '../validate/validate'
 import { validateDocument } from '../validate/validate'
 import { DashboardOverview } from './DashboardOverview'
-import { IconChevronRight, IconPlay, IconSettings } from './Icons'
+import { IconChevronRight, IconPanelLeftClose, IconPanelLeftOpen, IconPlay, IconSettings } from './Icons'
 import { ResourceUploadTab } from './ResourceUploadTab'
 import type { TabId } from './Sidebar'
 import { Sidebar } from './Sidebar'
@@ -38,6 +38,37 @@ export function App() {
   const [planInputs, setPlanInputs] = useState<PlanInput[]>([])
   const [operationResults, setOperationResults] = useState<OperationResult[]>([])
   const [isRunning, setIsRunning] = useState(false)
+
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('store-importer:sidebar-collapsed') === 'true'
+    } catch {
+      return false
+    }
+  })
+
+  const toggleSidebar = useCallback(() => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev
+      try {
+        localStorage.setItem('store-importer:sidebar-collapsed', String(next))
+      } catch {
+        // ignore
+      }
+      return next
+    })
+  }, [])
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+        e.preventDefault()
+        toggleSidebar()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [toggleSidebar])
 
   const refreshStoreIndex = useCallback(async () => {
     setStoreIndexLoading(true)
@@ -132,6 +163,8 @@ export function App() {
         operationResults={operationResults}
         totalOperations={planInputs.reduce((acc, p) => acc + p.rows.length, 0)}
         isRunning={isRunning}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={toggleSidebar}
       />
 
       {/* Main Dashboard Content */}
@@ -139,6 +172,26 @@ export function App() {
         {/* Topbar Header */}
         <header className="dashboard-topbar">
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button
+              type="button"
+              onClick={toggleSidebar}
+              title={sidebarCollapsed ? 'Expand sidebar (Ctrl+B)' : 'Collapse sidebar (Ctrl+B)'}
+              aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '6px',
+                borderRadius: 'var(--ds-radius-inner)',
+                background: 'transparent',
+                border: '1px solid var(--ds-color-border)',
+                color: 'var(--ds-color-text-secondary)',
+                cursor: 'pointer',
+                marginRight: '4px',
+              }}
+            >
+              {sidebarCollapsed ? <IconPanelLeftOpen size={16} /> : <IconPanelLeftClose size={16} />}
+            </button>
             <span style={{ fontSize: 'var(--ds-font-size-small)', color: 'var(--ds-color-text-secondary)' }}>
               Store Importer
             </span>

@@ -224,6 +224,44 @@ export function IconChevronRight({ size = 16, ...props }: IconProps) {
   )
 }
 
+export function IconChevronLeft({ size = 16, ...props }: IconProps) {
+  return (
+    <svg width={size} height={size} {...defaultProps} {...props}>
+      <polyline points="15 18 9 12 15 6" />
+    </svg>
+  )
+}
+
+export function IconPanelLeftClose({ size = 18, ...props }: IconProps) {
+  return (
+    <svg width={size} height={size} {...defaultProps} {...props}>
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <path d="M9 3v18" />
+      <path d="m16 15-3-3 3-3" />
+    </svg>
+  )
+}
+
+export function IconPanelLeftOpen({ size = 18, ...props }: IconProps) {
+  return (
+    <svg width={size} height={size} {...defaultProps} {...props}>
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <path d="M9 3v18" />
+      <path d="m14 9 3 3-3 3" />
+    </svg>
+  )
+}
+
+export function IconMenu({ size = 18, ...props }: IconProps) {
+  return (
+    <svg width={size} height={size} {...defaultProps} {...props}>
+      <line x1="3" y1="12" x2="21" y2="12" />
+      <line x1="3" y1="6" x2="21" y2="6" />
+      <line x1="3" y1="18" x2="21" y2="18" />
+    </svg>
+  )
+}
+
 export function IconTrash({ size = 16, ...props }: IconProps) {
   return (
     <svg width={size} height={size} {...defaultProps} {...props}>

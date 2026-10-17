@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { ImportDocument, ResourceKind } from '../../core/types'
 import { autoLayoutGraph, bundleGraph, createPresetGraph } from '../../graph/bundler'
+import type { CatalogueSearchItem } from '../../graph/catalogueSearch'
 import type {
   GraphEdge,
   GraphEdgeType,
@@ -17,10 +18,12 @@ import {
   IconLayout,
   IconMedia,
   IconProduct,
+  IconSearch,
   IconTag,
   IconVariant,
   IconWorkflow,
 } from '../Icons'
+import { CatalogueSearchModal } from './CatalogueSearchModal'
 import { GraphCanvas } from './GraphCanvas'
 import { ManifestModal } from './ManifestModal'
 import { NodeInspector } from './NodeInspector'
@@ -33,6 +36,7 @@ export function GraphBuilder({ onStageDocuments }: GraphBuilderProps) {
   const [graph, setGraph] = useState<ProductGraph>(() => createPresetGraph('simple'))
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>('node-prod-1')
   const [showManifestModal, setShowManifestModal] = useState(false)
+  const [showSearchModal, setShowSearchModal] = useState(false)
 
   const selectedNode = useMemo(
     () => graph.nodes.find((n) => n.id === selectedNodeId) ?? null,
@@ -232,6 +236,39 @@ export function GraphBuilder({ onStageDocuments }: GraphBuilderProps) {
     setGraph((prev) => autoLayoutGraph(prev))
   }
 
+  const handleSelectCatalogueResource = (item: CatalogueSearchItem, connectToSelected: boolean) => {
+    const existing = graph.nodes.find((n) => {
+      if (n.type !== item.kind) return false
+      if (item.kind === 'media') {
+        return (n.data as { fileName?: string }).fileName === item.slug
+      }
+      return (n.data as { slug?: string }).slug === item.slug
+    })
+
+    const targetNode: GraphNode =
+      existing ?? {
+        id: `node-${item.kind}-${Date.now().toString().slice(-4)}`,
+        type: item.kind as GraphNodeType,
+        x: selectedNode ? selectedNode.x + 280 : 360 + Math.floor(Math.random() * 80),
+        y: selectedNode ? selectedNode.y + Math.floor(Math.random() * 60) - 30 : 160 + Math.floor(Math.random() * 80),
+        data: item.data as never,
+      }
+
+    if (!existing) {
+      setGraph((prev) => ({
+        ...prev,
+        nodes: [...prev.nodes, targetNode],
+        updatedAt: new Date().toISOString(),
+      }))
+    }
+
+    if (connectToSelected && selectedNodeId && targetNode.id !== selectedNodeId) {
+      handleAddEdge(selectedNodeId, targetNode.id)
+    }
+
+    setSelectedNodeId(targetNode.id)
+  }
+
   const handleStageToImporter = () => {
     onStageDocuments(bundleResult.documents)
     setShowManifestModal(false)
@@ -307,6 +344,26 @@ export function GraphBuilder({ onStageDocuments }: GraphBuilderProps) {
               <option value="empty">Empty Canvas</option>
             </select>
           </div>
+
+          <div style={{ height: '24px', width: '1px', background: 'var(--ds-color-border)', margin: '0 4px' }} />
+
+          {/* Search Store API Button */}
+          <button
+            type="button"
+            className="small"
+            onClick={() => setShowSearchModal(true)}
+            title="Search existing tags, collections, media, brands, categories from the Store API"
+            style={{
+              gap: '6px',
+              background: 'var(--ds-color-surface-muted)',
+              border: '1px solid var(--ds-color-border)',
+              color: 'var(--ds-color-text-primary)',
+              fontWeight: 500,
+            }}
+          >
+            <IconSearch size={13} style={{ color: 'var(--ds-color-primary)' }} />
+            Search Store API
+          </button>
         </div>
 
         {/* Center: Add Node Buttons */}
@@ -434,6 +491,7 @@ export function GraphBuilder({ onStageDocuments }: GraphBuilderProps) {
             onDeleteNode={handleDeleteNode}
             onAddEdge={handleAddEdge}
             onDeleteEdge={handleDeleteEdge}
+            onOpenSearch={() => setShowSearchModal(true)}
             onClose={() => setSelectedNodeId(null)}
           />
         )}
@@ -445,6 +503,15 @@ export function GraphBuilder({ onStageDocuments }: GraphBuilderProps) {
           bundleResult={bundleResult}
           onStageToImporter={handleStageToImporter}
           onClose={() => setShowManifestModal(false)}
+        />
+      )}
+
+      {/* Store Catalogue Search Modal */}
+      {showSearchModal && (
+        <CatalogueSearchModal
+          selectedNode={selectedNode}
+          onSelectResource={handleSelectCatalogueResource}
+          onClose={() => setShowSearchModal(false)}
         />
       )}
     </div>

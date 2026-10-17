@@ -1,7 +1,9 @@
 import {
   useCallback,
+  useEffect,
   useRef,
   useState,
+  type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent,
 } from 'react'
 import type { GraphEdge, GraphNode } from '../../graph/types'
@@ -51,8 +53,67 @@ export function GraphCanvas({
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const [isPanning, setIsPanning] = useState(false)
   const [panStart, setPanStart] = useState({ x: 0, y: 0 })
+  const [isSpacePressed, setIsSpacePressed] = useState(false)
+
+  // Refs to allow non-passive wheel event handler to read current values without stale closures
+  const zoomRef = useRef(zoom)
+  const panRef = useRef(pan)
+
+  useEffect(() => {
+    zoomRef.current = zoom
+    panRef.current = pan
+  }, [zoom, pan])
+
+  // Non-passive wheel event listener for smooth touchpad pinch-to-zoom, Ctrl+wheel zoom, and 2-finger scroll
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault()
+
+      const currentZoom = zoomRef.current
+      const currentPan = panRef.current
+      const rect = el.getBoundingClientRect()
+      const mouseX = e.clientX - rect.left
+      const mouseY = e.clientY - rect.top
+
+      if (e.ctrlKey || e.metaKey) {
+        // Touchpad pinch-to-zoom OR Ctrl + Mouse Wheel: zoom centered at cursor
+        const worldX = (mouseX - currentPan.x) / currentZoom
+        const worldY = (mouseY - currentPan.y) / currentZoom
+
+        const zoomFactor = -e.deltaY * 0.006
+        const nextZoom = Math.min(2.5, Math.max(0.25, currentZoom * Math.exp(zoomFactor)))
+
+        const nextPanX = mouseX - worldX * nextZoom
+        const nextPanY = mouseY - worldY * nextZoom
+
+        setZoom(nextZoom)
+        setPan({ x: nextPanX, y: nextPanY })
+      } else {
+        // Trackpad 2-finger swipe OR standard mouse wheel: pan canvas
+        let dx = e.deltaX
+        let dy = e.deltaY
+
+        if (e.shiftKey && dx === 0) {
+          dx = dy
+          dy = 0
+        }
+
+        setPan({
+          x: currentPan.x - dx,
+          y: currentPan.y - dy,
+        })
+      }
+    }
+
+    el.addEventListener('wheel', handleWheel, { passive: false })
+    return () => el.removeEventListener('wheel', handleWheel)
+  }, [])
 
   const handleMouseDownNode = (e: MouseEvent, node: GraphNode) => {
+    if (isSpacePressed) return // Allow spacebar drag over nodes to pan canvas
     e.stopPropagation()
     onSelectNode(node)
     setDraggingNode({
@@ -77,15 +138,24 @@ export function GraphCanvas({
   }
 
   const handleCanvasMouseDown = (e: MouseEvent) => {
-    if (e.button === 0 && (e.target === containerRef.current || (e.target as HTMLElement).tagName === 'svg')) {
-      onSelectNode(null)
+    const isMiddleClick = e.button === 1
+    const isSpaceClick = e.button === 0 && isSpacePressed
+    const isBackgroundClick =
+      e.button === 0 &&
+      (e.target === containerRef.current ||
+        (e.target as HTMLElement).tagName === 'svg' ||
+        (e.target as HTMLElement).tagName === 'rect')
+
+    if (isMiddleClick || isSpaceClick || isBackgroundClick) {
+      if (!isSpaceClick && !isMiddleClick) {
+        onSelectNode(null)
+      }
       if (connectingSource) {
         setConnectingSource(null)
         setMousePos(null)
-      } else {
-        setIsPanning(true)
-        setPanStart({ x: e.clientX - pan.x, y: e.clientY - pan.y })
       }
+      setIsPanning(true)
+      setPanStart({ x: e.clientX - pan.x, y: e.clientY - pan.y })
     }
   }
 
@@ -122,6 +192,67 @@ export function GraphCanvas({
     setIsPanning(false)
   }
 
+  // Keypad & keyboard shortcuts
+  const handleKeyDown = (e: ReactKeyboardEvent) => {
+    const targetTag = (e.target as HTMLElement).tagName
+    const isInputActive = targetTag === 'INPUT' || targetTag === 'TEXTAREA' || targetTag === 'SELECT'
+
+    if (e.code === 'Space' && !isInputActive && !isSpacePressed) {
+      e.preventDefault()
+      setIsSpacePressed(true)
+      return
+    }
+
+    if (isInputActive) return
+
+    // Keypad zoom controls
+    if (e.key === '+' || e.key === '=' || e.code === 'NumpadAdd') {
+      e.preventDefault()
+      setZoom((z) => Math.min(2.5, +(z * 1.15).toFixed(2)))
+    } else if (e.key === '-' || e.key === '_' || e.code === 'NumpadSubtract') {
+      e.preventDefault()
+      setZoom((z) => Math.max(0.25, +(z * 0.85).toFixed(2)))
+    } else if (e.key === '0' || e.code === 'Numpad0') {
+      e.preventDefault()
+      setZoom(1)
+      setPan({ x: 0, y: 0 })
+    }
+    // Arrow keys pan canvas
+    else if (e.key === 'ArrowLeft') {
+      e.preventDefault()
+      setPan((p) => ({ ...p, x: p.x + (e.shiftKey ? 120 : 40) }))
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault()
+      setPan((p) => ({ ...p, x: p.x - (e.shiftKey ? 120 : 40) }))
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setPan((p) => ({ ...p, y: p.y + (e.shiftKey ? 120 : 40) }))
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setPan((p) => ({ ...p, y: p.y - (e.shiftKey ? 120 : 40) }))
+    }
+    // Delete/Backspace: delete selected node
+    else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedNodeId) {
+      e.preventDefault()
+      onDeleteNode(selectedNodeId)
+    }
+    // Escape: cancel connection or deselect
+    else if (e.key === 'Escape') {
+      if (connectingSource) {
+        setConnectingSource(null)
+        setMousePos(null)
+      } else {
+        onSelectNode(null)
+      }
+    }
+  }
+
+  const handleKeyUp = (e: ReactKeyboardEvent) => {
+    if (e.code === 'Space') {
+      setIsSpacePressed(false)
+    }
+  }
+
   // Calculate Bezier curves for edges
   const nodeMap = new Map<string, GraphNode>()
   nodes.forEach((n) => nodeMap.set(n.id, n))
@@ -129,16 +260,26 @@ export function GraphCanvas({
   return (
     <div
       ref={containerRef}
+      tabIndex={0}
       onMouseDown={handleCanvasMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
+      onKeyDown={handleKeyDown}
+      onKeyUp={handleKeyUp}
       style={{
         flex: 1,
         height: '100%',
         position: 'relative',
         overflow: 'hidden',
         background: 'var(--ds-color-canvas)',
-        cursor: isPanning ? 'grabbing' : connectingSource ? 'crosshair' : 'default',
+        outline: 'none',
+        cursor: isPanning
+          ? 'grabbing'
+          : isSpacePressed
+          ? 'grab'
+          : connectingSource
+          ? 'crosshair'
+          : 'default',
       }}
     >
       {/* Background Grid Pattern */}
@@ -310,8 +451,9 @@ export function GraphCanvas({
           left: '16px',
           display: 'flex',
           gap: '6px',
+          alignItems: 'center',
           background: 'var(--ds-color-surface)',
-          padding: '4px',
+          padding: '4px 8px',
           borderRadius: 'var(--ds-radius-card)',
           border: '1px solid var(--ds-color-border)',
           boxShadow: '0 2px 4px rgba(0,0,0,0.06)',
@@ -321,16 +463,16 @@ export function GraphCanvas({
         <button
           type="button"
           className="small"
-          onClick={() => setZoom((z) => Math.min(1.8, z + 0.15))}
-          title="Zoom In"
+          onClick={() => setZoom((z) => Math.min(2.5, +(z * 1.15).toFixed(2)))}
+          title="Zoom In (+ / Keypad +)"
         >
           +
         </button>
         <button
           type="button"
           className="small"
-          onClick={() => setZoom((z) => Math.max(0.4, z - 0.15))}
-          title="Zoom Out"
+          onClick={() => setZoom((z) => Math.max(0.25, +(z * 0.85).toFixed(2)))}
+          title="Zoom Out (- / Keypad -)"
         >
           -
         </button>
@@ -341,10 +483,20 @@ export function GraphCanvas({
             setZoom(1)
             setPan({ x: 0, y: 0 })
           }}
-          title="Reset Zoom & Pan"
+          title="Reset Zoom & Pan (0 / Keypad 0)"
         >
           {Math.round(zoom * 100)}%
         </button>
+        <div style={{ height: '16px', width: '1px', background: 'var(--ds-color-border)', margin: '0 2px' }} />
+        <span
+          style={{
+            fontSize: 'var(--ds-font-size-caption)',
+            color: 'var(--ds-color-text-secondary)',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          Pinch / Ctrl+Wheel to Zoom • 2-finger / Space+Drag to Pan
+        </span>
       </div>
 
       {/* Floating Instructions when connecting */}

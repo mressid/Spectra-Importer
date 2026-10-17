@@ -3,6 +3,7 @@ import { getNodeDisplayTitle, type GraphEdge, type GraphNode } from '../../graph
 import {
   IconClose,
   IconLink,
+  IconSearch,
   IconTrash,
   IconUnlink,
 } from '../Icons'
@@ -15,6 +16,7 @@ interface NodeInspectorProps {
   onDeleteNode: (nodeId: string) => void
   onAddEdge: (sourceId: string, targetId: string) => void
   onDeleteEdge: (edgeId: string) => void
+  onOpenSearch?: () => void
   onClose: () => void
 }
 
@@ -26,6 +28,7 @@ export function NodeInspector({
   onDeleteNode,
   onAddEdge,
   onDeleteEdge,
+  onOpenSearch,
   onClose,
 }: NodeInspectorProps) {
   const [connectTargetId, setConnectTargetId] = useState('')
@@ -300,9 +303,34 @@ export function NodeInspector({
 
         {/* Connections Section */}
         <div style={{ marginTop: '10px', paddingTop: '12px', borderTop: '1px solid var(--ds-color-border)' }}>
-          <div style={{ fontWeight: 600, fontSize: 'var(--ds-font-size-small)', marginBottom: '8px' }}>
-            Connections ({nodeEdges.length})
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+            <span style={{ fontWeight: 600, fontSize: 'var(--ds-font-size-small)' }}>
+              Connections ({nodeEdges.length})
+            </span>
           </div>
+
+          {onOpenSearch && (
+            <button
+              type="button"
+              className="small"
+              onClick={onOpenSearch}
+              style={{
+                width: '100%',
+                marginBottom: '10px',
+                gap: '6px',
+                justifyContent: 'center',
+                background: 'var(--ds-color-surface-muted)',
+                border: '1px solid var(--ds-color-border)',
+                color: 'var(--ds-color-text-primary)',
+                fontWeight: 500,
+                padding: '6px 10px',
+              }}
+              title="Search existing tags, collections, media, brands, categories from the Store API"
+            >
+              <IconSearch size={13} style={{ color: 'var(--ds-color-primary)' }} />
+              Search & Link from Store API...
+            </button>
+          )}
 
           {nodeEdges.length > 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '12px' }}>
@@ -347,15 +375,15 @@ export function NodeInspector({
             </div>
           )}
 
-          {/* Connect to another node */}
+          {/* Connect to another canvas node */}
           {otherNodes.length > 0 && (
-            <div style={{ display: 'flex', gap: '6px' }}>
+            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
               <select
                 value={connectTargetId}
                 onChange={(e) => setConnectTargetId(e.target.value)}
                 style={{ flex: 1, fontSize: 'var(--ds-font-size-small)' }}
               >
-                <option value="">Connect with node...</option>
+                <option value="">Connect with canvas node...</option>
                 {otherNodes.map((n) => {
                   const label = getNodeDisplayTitle(n)
                   return (
@@ -370,7 +398,7 @@ export function NodeInspector({
                 className="small primary"
                 disabled={!connectTargetId}
                 onClick={handleConnect}
-                style={{ gap: '4px' }}
+                style={{ gap: '4px', flexShrink: 0, height: '32px' }}
               >
                 <IconLink size={13} />
                 Connect

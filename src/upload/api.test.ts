@@ -6,6 +6,8 @@ import {
   login,
   logout,
   refreshAuthToken,
+  setMediaBindings,
+  uploadFile,
 } from './api'
 
 describe('api auth and token management', () => {
@@ -125,5 +127,80 @@ describe('api auth and token management', () => {
     logout()
     expect(isLoggedIn()).toBe(false)
     expect(getCurrentUserEmail()).toBeNull()
+  })
+
+  it('uploadFile extracts uploaded file details including id', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: {
+          id: 'file-12345',
+          url: 'http://localhost:9000/store/test.jpg',
+          mediaType: 'IMAGE',
+          width: 800,
+          height: 1000,
+          sizeBytes: 45000,
+          duplicate: false,
+        },
+      }),
+    })
+
+    const blob = new Blob(['test'], { type: 'image/jpeg' })
+    const result = await uploadFile(blob, 'test.jpg')
+
+    expect(result.id).toBe('file-12345')
+    expect(result.url).toBe('http://localhost:9000/store/test.jpg')
+    expect(result.width).toBe(800)
+    expect(result.height).toBe(1000)
+    expect(result.duplicate).toBe(false)
+  })
+
+  it('setMediaBindings sends bindings payload to backend', async () => {
+    let capturedBody: string | undefined
+    globalThis.fetch = vi.fn().mockImplementation(async (_url, init) => {
+      capturedBody = init.body
+      return {
+        ok: true,
+        json: async () => ({
+          data: [
+            {
+              uploadedFileId: 'file-123',
+              target: 'product',
+              name: 'ring-a',
+              role: 'THUMBNAIL',
+              order: 1,
+              status: 'APPLIED',
+            },
+            {
+              uploadedFileId: 'file-123',
+              target: 'product',
+              name: 'ring-b',
+              role: 'THUMBNAIL',
+              order: 1,
+              status: 'WAITING',
+            },
+          ],
+        }),
+      }
+    })
+
+    const res = await setMediaBindings({
+      uploadedFileId: 'file-123',
+      bindings: [
+        { target: 'product', name: 'ring-a', role: 'THUMBNAIL', order: 1 },
+        { target: 'product', name: 'ring-b', role: 'THUMBNAIL', order: 1 },
+      ],
+    })
+
+    expect(res).toHaveLength(2)
+    expect(res[0].status).toBe('APPLIED')
+    expect(res[1].status).toBe('WAITING')
+    expect(JSON.parse(capturedBody!)).toEqual({
+      uploadedFileId: 'file-123',
+      bindings: [
+        { target: 'product', name: 'ring-a', role: 'THUMBNAIL', order: 1 },
+        { target: 'product', name: 'ring-b', role: 'THUMBNAIL', order: 1 },
+      ],
+    })
   })
 })

@@ -1,5 +1,10 @@
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import type { ImportDocument } from '../core/types'
+import {
+  isLoggedIn,
+  setMediaBindings,
+  type MediaBindingStatusDto,
+} from '../upload/api'
 import {
   generateRowsFromStructuredProduct,
   parseStructuredFolder,
@@ -8,9 +13,18 @@ import {
 import type { ImageLibrary } from '../upload/imageLibrary'
 import { addToLibrary, saveLibrary } from '../upload/imageLibrary'
 import {
+  calculateAspectRatio,
+  parseMediaFolder,
+  type ParsedMediaAsset,
+  type ParseMediaFolderResult,
+} from '../upload/mediaFolderParser'
+import {
   IconCamera,
+  IconCheckCircle,
+  IconClock,
   IconCopy,
   IconFolderOpen,
+  IconLink,
   IconMedia,
   IconTrash,
   IconUpload,
@@ -85,6 +99,12 @@ export function StepImages({ library, onLibraryChange, onNext, onAutoConfigure }
   const [isDragOver, setIsDragOver] = useState(false)
   const [detectedProducts, setDetectedProducts] = useState<StructuredProductFolder[]>([])
 
+  // Media Library folder parsing and bindings
+  const [mediaFolderResult, setMediaFolderResult] = useState<ParseMediaFolderResult | null>(null)
+  const [bindingStatuses, setBindingStatuses] = useState<Map<string, MediaBindingStatusDto[]>>(new Map())
+  const [isSyncingBindings, setIsSyncingBindings] = useState(false)
+  const [bindingSyncSummary, setBindingSyncSummary] = useState<string | null>(null)
+
   const fileInputRef = useRef<HTMLInputElement>(null)
   const folderInputRef = useRef<HTMLInputElement>(null)
 
@@ -92,8 +112,15 @@ export function StepImages({ library, onLibraryChange, onNext, onAutoConfigure }
     if (files.length === 0) return
 
     setFailures([])
+    setBindingSyncSummary(null)
 
-    // Check if the files match structured folder patterns
+    // Check media library folder structure (targets, multi-name *:[...], roles, aspect ratios, orders)
+    const mediaParsed = parseMediaFolder(files)
+    if (mediaParsed.assets.length > 0) {
+      setMediaFolderResult(mediaParsed)
+    }
+
+    // Check legacy product/variants structure
     const parsed = parseStructuredFolder(files)
     if (parsed.products.length > 0) {
       setDetectedProducts(parsed.products)
@@ -115,6 +142,49 @@ export function StepImages({ library, onLibraryChange, onNext, onAutoConfigure }
     setFailures(newFailures)
     setUploadProgress(null)
     onLibraryChange(updatedLibrary)
+  }
+
+  const handleSyncBindings = async () => {
+    if (!mediaFolderResult || mediaFolderResult.assets.length === 0) return
+    setIsSyncingBindings(true)
+    setBindingSyncSummary(null)
+
+    const updatedStatuses = new Map(bindingStatuses)
+    let appliedCount = 0
+    let waitingCount = 0
+    let failedCount = 0
+
+    for (const asset of mediaFolderResult.assets) {
+      if (asset.bindings.length === 0) continue
+
+      // Look up image in library by relativePath or fileName
+      const image = library.get(asset.relativePath) || library.get(asset.fileName)
+      if (!image?.id) continue
+
+      try {
+        const statuses = await setMediaBindings({
+          uploadedFileId: image.id,
+          bindings: asset.bindings,
+        })
+        updatedStatuses.set(String(image.id), statuses)
+        updatedStatuses.set(asset.relativePath, statuses)
+
+        for (const st of statuses) {
+          if (st.status === 'APPLIED') appliedCount++
+          else if (st.status === 'WAITING') waitingCount++
+        }
+      } catch {
+        failedCount++
+      }
+    }
+
+    setBindingStatuses(updatedStatuses)
+    setIsSyncingBindings(false)
+    setBindingSyncSummary(
+      `Bindings synced: ${appliedCount} applied immediately, ${waitingCount} waiting in pending_media${
+        failedCount > 0 ? `, ${failedCount} errors` : ''
+      }`,
+    )
   }
 
   const handleAutoConfigure = (product: StructuredProductFolder) => {
@@ -155,15 +225,27 @@ export function StepImages({ library, onLibraryChange, onNext, onAutoConfigure }
     onLibraryChange(updated)
   }
 
-  const imagesList = Array.from(library.values())
+  const imagesList = useMemo(() => Array.from(library.values()), [library])
+
+  // Map of relativePath -> ParsedMediaAsset
+  const assetMap = useMemo(() => {
+    const map = new Map<string, ParsedMediaAsset>()
+    if (mediaFolderResult) {
+      for (const asset of mediaFolderResult.assets) {
+        map.set(asset.relativePath, asset)
+        map.set(asset.fileName, asset)
+      }
+    }
+    return map
+  }, [mediaFolderResult])
 
   return (
     <div className="card">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
         <div>
-          <h2>2. Image Library & Folder Uploader</h2>
+          <h2>2. Media Library & Folder Uploader</h2>
           <p style={{ color: 'var(--ds-color-text-secondary)', margin: 0 }}>
-            Select folders or files. Folders structured with thumbnail, gallery images and variant subfolders are automatically detected.
+            Upload folders or files. Encodes targets, multi-names (<code>*:[slug-a, slug-b]</code>), roles, path orders, and aspect ratios into media bindings.
           </p>
         </div>
         <button className="primary" type="button" onClick={onNext}>
@@ -187,10 +269,10 @@ export function StepImages({ library, onLibraryChange, onNext, onAutoConfigure }
         style={{ marginBottom: '16px' }}
       >
         <p style={{ fontWeight: 600, marginBottom: '8px' }}>
-          Select or drop a structured folder (or media files)
+          Select or drop a structured media folder (or files)
         </p>
         <p style={{ color: 'var(--ds-color-text-secondary)', fontSize: 'var(--ds-font-size-small)', marginBottom: '12px' }}>
-          Structure: <code>folder/&#123;thumbnail.png, images/*.png, variants/var1/images/*.png&#125;</code> (PNG, JPG, WEBP, MP4, etc.)
+          Supports: <code>*:[ring-a, ring-b]/gallery/01.jpg</code>, <code>category/rings/16:9/banner.jpg</code>, <code>product/slug/thumbnail.png</code>
         </p>
         <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
           <button
@@ -228,7 +310,7 @@ export function StepImages({ library, onLibraryChange, onNext, onAutoConfigure }
       <input
         ref={folderInputRef}
         type="file"
-        // @ts-expect-error webkitdirectory is standard in browsers
+        // @ts-expect-error webkitdirectory is standard in modern browsers
         webkitdirectory=""
         directory=""
         multiple
@@ -259,8 +341,8 @@ export function StepImages({ library, onLibraryChange, onNext, onAutoConfigure }
         </div>
       )}
 
-      {/* Detected structured product folders banner */}
-      {detectedProducts.length > 0 && (
+      {/* Detected Media Library Bindings Banner */}
+      {mediaFolderResult && mediaFolderResult.assets.length > 0 && (
         <div
           style={{
             background: 'var(--ds-color-surface-muted)',
@@ -270,18 +352,155 @@ export function StepImages({ library, onLibraryChange, onNext, onAutoConfigure }
             marginBottom: '16px',
           }}
         >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '12px' }}>
             <div>
               <h3 style={{ margin: 0, color: 'var(--ds-color-accent)' }}>
-                Structured Product Folders Detected ({detectedProducts.length})
+                Media Library Bindings Detected ({mediaFolderResult.assets.length} assets)
               </h3>
               <span style={{ fontSize: 'var(--ds-font-size-small)', color: 'var(--ds-color-text-secondary)' }}>
-                We identified thumbnail, gallery images and variant structures in your folder.
+                Entities, roles, path-bound orders and aspect ratios parsed from directory structure.
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              {isLoggedIn() ? (
+                <button
+                  className="primary small"
+                  type="button"
+                  onClick={handleSyncBindings}
+                  disabled={isSyncingBindings || uploadProgress !== null}
+                >
+                  <IconLink size={14} />
+                  {isSyncingBindings ? 'Syncing...' : 'Sync Bindings to Store'}
+                </button>
+              ) : (
+                <span className="badge warning">Connect store to sync bindings</span>
+              )}
+            </div>
+          </div>
+
+          {/* Badges overview */}
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '12px' }}>
+            {Object.entries(mediaFolderResult.targetSummary).map(([target, count]) => (
+              <span key={target} className="badge info">
+                {target}: {count} {count === 1 ? 'binding' : 'bindings'}
+              </span>
+            ))}
+            {mediaFolderResult.multiBoundAssetsCount > 0 && (
+              <span className="badge success">
+                {mediaFolderResult.multiBoundAssetsCount} multi-bound assets (*:[...])
+              </span>
+            )}
+          </div>
+
+          {/* Binding sync summary notice */}
+          {bindingSyncSummary && (
+            <div
+              style={{
+                fontSize: 'var(--ds-font-size-small)',
+                color: 'var(--ds-color-accent)',
+                fontWeight: 500,
+                marginBottom: '12px',
+              }}
+            >
+              {bindingSyncSummary}
+            </div>
+          )}
+
+          {/* Detected asset list */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '240px', overflowY: 'auto' }}>
+            {mediaFolderResult.assets.map((asset) => {
+              const image = library.get(asset.relativePath) || library.get(asset.fileName)
+              const statuses = image?.id ? bindingStatuses.get(String(image.id)) : bindingStatuses.get(asset.relativePath)
+
+              return (
+                <div
+                  key={asset.relativePath}
+                  style={{
+                    background: 'var(--ds-color-surface)',
+                    border: '1px solid var(--ds-color-border)',
+                    borderRadius: 'var(--ds-radius-inner)',
+                    padding: '8px 12px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: '8px',
+                  }}
+                >
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                    <div style={{ fontWeight: 600, fontSize: 'var(--ds-font-size-small)' }}>
+                      {asset.relativePath}
+                    </div>
+                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+                      {asset.explicitAspectRatio && (
+                        <span className="badge info">{asset.explicitAspectRatio}</span>
+                      )}
+                      {asset.detectedAltText && (
+                        <span style={{ fontSize: 'var(--ds-font-size-caption)', color: 'var(--ds-color-text-secondary)' }}>
+                          Alt: &quot;{asset.detectedAltText}&quot;
+                        </span>
+                      )}
+                      {asset.bindings.map((b, i) => (
+                        <span key={i} className="badge">
+                          {b.target}: <strong>{b.name}</strong> • {b.role} (#{b.order})
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                    {statuses && statuses.length > 0 ? (
+                      statuses.map((st, idx) => (
+                        <span
+                          key={idx}
+                          className={`badge ${st.status === 'APPLIED' ? 'success' : 'warning'}`}
+                          title={`${st.target}:${st.name} (${st.status})`}
+                        >
+                          {st.status === 'APPLIED' ? (
+                            <IconCheckCircle size={12} />
+                          ) : (
+                            <IconClock size={12} />
+                          )}
+                          {st.status}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="badge" style={{ color: 'var(--ds-color-text-secondary)' }}>
+                        Pending Sync
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Detected structured product folders banner (legacy/classic auto-configure) */}
+      {detectedProducts.length > 0 && (
+        <div
+          style={{
+            background: 'var(--ds-color-surface-muted)',
+            border: '1px solid var(--ds-color-border)',
+            borderRadius: 'var(--ds-radius-card)',
+            padding: '16px',
+            marginBottom: '16px',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <div>
+              <h3 style={{ margin: 0 }}>
+                Product Folders Detected ({detectedProducts.length})
+              </h3>
+              <span style={{ fontSize: 'var(--ds-font-size-small)', color: 'var(--ds-color-text-secondary)' }}>
+                Optionally generate product and variant records from folder layout.
               </span>
             </div>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {detectedProducts.map((p) => (
               <div
                 key={p.folderName}
@@ -354,65 +573,104 @@ export function StepImages({ library, onLibraryChange, onNext, onAutoConfigure }
           </p>
         ) : (
           <div className="image-grid">
-            {imagesList.map((img) => (
-              <div key={img.fileName} className="image-card">
-                {img.mediaType === 'VIDEO' ? (
-                  <video src={img.url} style={{ width: '100%', height: '120px', objectFit: 'cover', borderRadius: 'var(--ds-radius-inner)' }} />
-                ) : (
-                  <img src={img.url} alt={img.fileName} loading="lazy" />
-                )}
+            {imagesList.map((img) => {
+              const ratio = img.width && img.height ? calculateAspectRatio(img.width, img.height) : undefined
+              const matchedAsset = assetMap.get(img.fileName)
+              const statuses = img.id ? bindingStatuses.get(String(img.id)) : undefined
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <div
-                    style={{
-                      fontWeight: 600,
-                      fontSize: 'var(--ds-font-size-caption)',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                    title={img.fileName}
-                  >
-                    {img.fileName}
-                  </div>
+              return (
+                <div key={img.fileName} className="image-card">
+                  {img.mediaType === 'VIDEO' ? (
+                    <video src={img.url} style={{ width: '100%', height: '120px', objectFit: 'cover', borderRadius: 'var(--ds-radius-inner)' }} />
+                  ) : (
+                    <img src={img.url} alt={img.fileName} loading="lazy" />
+                  )}
 
-                  <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', alignItems: 'center' }}>
-                    <span style={{ fontSize: 'var(--ds-font-size-caption)', color: 'var(--ds-color-text-secondary)' }}>
-                      {formatSize(img.sizeBytes)}
-                    </span>
-                    {img.width && img.height && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <div
+                      style={{
+                        fontWeight: 600,
+                        fontSize: 'var(--ds-font-size-caption)',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                      title={img.fileName}
+                    >
+                      {img.fileName}
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', alignItems: 'center' }}>
                       <span style={{ fontSize: 'var(--ds-font-size-caption)', color: 'var(--ds-color-text-secondary)' }}>
-                        • {img.width}×{img.height}
+                        {formatSize(img.sizeBytes)}
                       </span>
+                      {img.width && img.height && (
+                        <span style={{ fontSize: 'var(--ds-font-size-caption)', color: 'var(--ds-color-text-secondary)' }}>
+                          • {img.width}×{img.height}
+                        </span>
+                      )}
+                      {ratio && (
+                        <span className="badge info" title={`Aspect ratio: ${ratio.formatted} (${ratio.orientation})`}>
+                          {ratio.formatted}
+                        </span>
+                      )}
+                      {img.duplicate && (
+                        <span className="badge info">already in store</span>
+                      )}
+                    </div>
+
+                    {/* Bindings & store status if present */}
+                    {matchedAsset && matchedAsset.bindings.length > 0 && (
+                      <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '2px' }}>
+                        {matchedAsset.bindings.map((b, bi) => (
+                          <span
+                            key={bi}
+                            className="badge"
+                            style={{ fontSize: 'var(--ds-font-size-caption)' }}
+                          >
+                            {b.target}:{b.name} ({b.role.toLowerCase()})
+                          </span>
+                        ))}
+                      </div>
                     )}
-                    {img.duplicate && (
-                      <span className="badge info">already in store</span>
+
+                    {statuses && statuses.length > 0 && (
+                      <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '2px' }}>
+                        {statuses.map((st, si) => (
+                          <span
+                            key={si}
+                            className={`badge ${st.status === 'APPLIED' ? 'success' : 'warning'}`}
+                          >
+                            {st.status}
+                          </span>
+                        ))}
+                      </div>
                     )}
                   </div>
-                </div>
 
-                <div style={{ display: 'flex', gap: '6px', marginTop: 'auto' }}>
-                  <button
-                    className="small"
-                    type="button"
-                    style={{ flex: 1, gap: '4px' }}
-                    onClick={() => handleCopy(img.fileName)}
-                  >
-                    <IconCopy size={13} />
-                    {copiedKey === img.fileName ? 'Copied!' : 'Copy media:name'}
-                  </button>
-                  <button
-                    className="small danger"
-                    type="button"
-                    title="Remove from local library"
-                    aria-label="Remove image"
-                    onClick={() => handleRemove(img.fileName)}
-                  >
-                    <IconTrash size={13} />
-                  </button>
+                  <div style={{ display: 'flex', gap: '6px', marginTop: 'auto' }}>
+                    <button
+                      className="small"
+                      type="button"
+                      style={{ flex: 1, gap: '4px' }}
+                      onClick={() => handleCopy(img.fileName)}
+                    >
+                      <IconCopy size={13} />
+                      {copiedKey === img.fileName ? 'Copied!' : 'Copy media:name'}
+                    </button>
+                    <button
+                      className="small danger"
+                      type="button"
+                      title="Remove from local library"
+                      aria-label="Remove image"
+                      onClick={() => handleRemove(img.fileName)}
+                    >
+                      <IconTrash size={13} />
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>

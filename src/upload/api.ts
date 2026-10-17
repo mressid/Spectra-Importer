@@ -261,6 +261,7 @@ export async function request<T>(method: string, path: string, body?: unknown, a
 
 /** What the store answers to an upload (UploadedFileResponseDto, the fields we use). */
 export interface UploadedFile {
+  id?: string | number
   url: string
   mediaType: 'IMAGE' | 'VIDEO'
   width: number | null
@@ -280,7 +281,54 @@ export async function uploadFile(file: Blob, name: string): Promise<UploadedFile
     headers: token ? { Authorization: `Bearer ${token}` } : {},
     body: form,
   })
-  const envelope = (await response.json().catch(() => null)) as { data?: UploadedFile; message?: string; errors?: string[] } | null
-  if (!response.ok || !envelope?.data) throw new StoreApiError(response.status, envelope?.message || response.statusText, envelope?.errors ?? [])
-  return envelope.data
+  const envelope = (await response.json().catch(() => null)) as {
+    data?: UploadedFile & { id?: string | number; uploadedFileId?: string | number }
+    message?: string
+    errors?: string[]
+  } | null
+  if (!response.ok || !envelope?.data) {
+    throw new StoreApiError(response.status, envelope?.message || response.statusText, envelope?.errors ?? [])
+  }
+  const data = envelope.data
+  return {
+    id: data.id ?? data.uploadedFileId,
+    url: data.url,
+    mediaType: data.mediaType,
+    width: data.width,
+    height: data.height,
+    sizeBytes: data.sizeBytes,
+    duplicate: data.duplicate,
+  }
+}
+
+export interface MediaBindingDto {
+  target: string
+  name: string
+  role: string
+  order?: number
+  altText?: string
+}
+
+export interface SetMediaBindingsRequest {
+  uploadedFileId: string | number
+  bindings: MediaBindingDto[]
+}
+
+export interface MediaBindingStatusDto {
+  id?: number | string
+  uploadedFileId: string | number
+  target: string
+  name: string
+  role: string
+  order: number
+  altText?: string
+  status: 'APPLIED' | 'WAITING'
+}
+
+/**
+ * PUT /api/v1/admin/media/bindings
+ * Binds an uploaded file to any number of named target places (existing or pending).
+ */
+export async function setMediaBindings(payload: SetMediaBindingsRequest): Promise<MediaBindingStatusDto[]> {
+  return request<MediaBindingStatusDto[]>('PUT', '/api/v1/admin/media/bindings', payload)
 }

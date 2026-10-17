@@ -62,6 +62,8 @@ export interface LibraryImage {
   /** The store already had this exact file; nothing new was stored. */
   duplicate: boolean
   uploadedAt: string
+  /** Backend ID from POST /api/v1/admin/uploads, used to bind media to targets. */
+  id?: string | number
 }
 
 /** A reference from one row to a row of another template, e.g. product.brand -> brands.slug. */

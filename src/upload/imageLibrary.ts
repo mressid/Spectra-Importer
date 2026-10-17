@@ -85,6 +85,7 @@ export async function addToLibrary(files: File[], library: ImageLibrary, options
           sizeBytes: uploaded.sizeBytes,
           duplicate: uploaded.duplicate,
           uploadedAt: new Date().toISOString(),
+          id: uploaded.id,
         }
         const replaced = library.has(fileKey)
         library.set(fileKey, image)

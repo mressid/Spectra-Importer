@@ -44,9 +44,9 @@ Row numbers are shown too, but never used to link anything.
 ### 2. Heavy content is uploaded first and referenced by file name
 Images and videos are never inside the data files, and there is no media CSV. Instead there is an **image uploader**
 (the "Images" step): the user drops files or a folder, each is sent at once to `POST /api/v1/admin/uploads`, and the tool
-keeps an **image library**: `fileName → url` (+ size, dimensions, `duplicate`), saved in the browser (`localStorage`) so it survives
+keeps an **image library**: `fileName → url` (+ size, dimensions, `duplicate`, and backend upload `id`), saved in the browser (`localStorage`) so it survives
 a reload. The store itself only returns a URL and recognises an identical file by its SHA-256, so dropping the same
-files again is harmless and gives the same URL.
+files again is harmless and gives the same URL. Dropped folders support media library path bindings (`PUT /api/v1/admin/media/bindings`) with wildcard multi-names, individual path orders, and aspect ratio tracking.
 
 Data files then say `media:<fileName>` in any picture field (`thumbnailUrl: media:ring-gold-1.jpg`, `images: media:a.jpg|media:b.jpg`,
 `logoUrl`, `imageUrl`, content block `url`). The file name is the key, exactly as dropped (case-sensitive, with extension);

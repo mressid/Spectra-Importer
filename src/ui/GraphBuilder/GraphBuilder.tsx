@@ -34,25 +34,51 @@ interface GraphBuilderProps {
 
 export function GraphBuilder({ onStageDocuments }: GraphBuilderProps) {
   const [graph, setGraph] = useState<ProductGraph>(() => createPresetGraph('simple'))
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>('node-prod-1')
+  const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>(['node-prod-1'])
   const [showManifestModal, setShowManifestModal] = useState(false)
   const [showSearchModal, setShowSearchModal] = useState(false)
 
-  const selectedNode = useMemo(
-    () => graph.nodes.find((n) => n.id === selectedNodeId) ?? null,
-    [graph.nodes, selectedNodeId],
+  const selectedNodes = useMemo(
+    () => graph.nodes.filter((n) => selectedNodeIds.includes(n.id)),
+    [graph.nodes, selectedNodeIds],
   )
+  const primarySelectedNode = selectedNodes[0] ?? null
 
   const bundleResult = useMemo(() => bundleGraph(graph), [graph])
 
   // --- Graph Mutators ---
 
-  const handleUpdateNodePosition = (nodeId: string, x: number, y: number) => {
+  const handleUpdateNodesPositions = (updates: { id: string; x: number; y: number }[]) => {
+    const map = new Map(updates.map((u) => [u.id, u]))
     setGraph((prev) => ({
       ...prev,
-      nodes: prev.nodes.map((n) => (n.id === nodeId ? { ...n, x, y } : n)),
+      nodes: prev.nodes.map((n) => {
+        const u = map.get(n.id)
+        return u ? { ...n, x: u.x, y: u.y } : n
+      }),
       updatedAt: new Date().toISOString(),
     }))
+  }
+
+  const handleSelectNodes = (nodeIds: string[]) => {
+    setSelectedNodeIds(nodeIds)
+  }
+
+  const handleToggleSelectNode = (nodeId: string) => {
+    setSelectedNodeIds((prev) =>
+      prev.includes(nodeId) ? prev.filter((id) => id !== nodeId) : [...prev, nodeId],
+    )
+  }
+
+  const handleDeleteNodes = (nodeIds: string[]) => {
+    const idSet = new Set(nodeIds)
+    setGraph((prev) => ({
+      ...prev,
+      nodes: prev.nodes.filter((n) => !idSet.has(n.id)),
+      edges: prev.edges.filter((e) => !idSet.has(e.source) && !idSet.has(e.target)),
+      updatedAt: new Date().toISOString(),
+    }))
+    setSelectedNodeIds((prev) => prev.filter((id) => !idSet.has(id)))
   }
 
   const handleUpdateNodeData = (nodeId: string, updatedData: Record<string, unknown>) => {
@@ -141,19 +167,7 @@ export function GraphBuilder({ onStageDocuments }: GraphBuilderProps) {
       updatedAt: new Date().toISOString(),
     }))
 
-    setSelectedNodeId(id)
-  }
-
-  const handleDeleteNode = (nodeId: string) => {
-    setGraph((prev) => ({
-      ...prev,
-      nodes: prev.nodes.filter((n) => n.id !== nodeId),
-      edges: prev.edges.filter((e) => e.source !== nodeId && e.target !== nodeId),
-      updatedAt: new Date().toISOString(),
-    }))
-    if (selectedNodeId === nodeId) {
-      setSelectedNodeId(null)
-    }
+    setSelectedNodeIds([id])
   }
 
   const handleAddEdge = (sourceId: string, targetId: string) => {
@@ -229,7 +243,7 @@ export function GraphBuilder({ onStageDocuments }: GraphBuilderProps) {
   const handleApplyPreset = (preset: 'simple' | 'variants' | 'hierarchy' | 'empty') => {
     const newGraph = createPresetGraph(preset)
     setGraph(newGraph)
-    setSelectedNodeId(newGraph.nodes[0]?.id ?? null)
+    setSelectedNodeIds(newGraph.nodes[0] ? [newGraph.nodes[0].id] : [])
   }
 
   const handleAutoLayout = () => {
@@ -249,8 +263,8 @@ export function GraphBuilder({ onStageDocuments }: GraphBuilderProps) {
       existing ?? {
         id: `node-${item.kind}-${Date.now().toString().slice(-4)}`,
         type: item.kind as GraphNodeType,
-        x: selectedNode ? selectedNode.x + 280 : 360 + Math.floor(Math.random() * 80),
-        y: selectedNode ? selectedNode.y + Math.floor(Math.random() * 60) - 30 : 160 + Math.floor(Math.random() * 80),
+        x: primarySelectedNode ? primarySelectedNode.x + 280 : 360 + Math.floor(Math.random() * 80),
+        y: primarySelectedNode ? primarySelectedNode.y + Math.floor(Math.random() * 60) - 30 : 160 + Math.floor(Math.random() * 80),
         data: item.data as never,
       }
 
@@ -262,11 +276,11 @@ export function GraphBuilder({ onStageDocuments }: GraphBuilderProps) {
       }))
     }
 
-    if (connectToSelected && selectedNodeId && targetNode.id !== selectedNodeId) {
-      handleAddEdge(selectedNodeId, targetNode.id)
+    if (connectToSelected && primarySelectedNode && targetNode.id !== primarySelectedNode.id) {
+      handleAddEdge(primarySelectedNode.id, targetNode.id)
     }
 
-    setSelectedNodeId(targetNode.id)
+    setSelectedNodeIds([targetNode.id])
   }
 
   const handleStageToImporter = () => {
@@ -474,25 +488,26 @@ export function GraphBuilder({ onStageDocuments }: GraphBuilderProps) {
         <GraphCanvas
           nodes={graph.nodes}
           edges={graph.edges}
-          selectedNodeId={selectedNodeId}
-          onSelectNode={(node) => setSelectedNodeId(node ? node.id : null)}
-          onUpdateNodePosition={handleUpdateNodePosition}
-          onDeleteNode={handleDeleteNode}
+          selectedNodeIds={selectedNodeIds}
+          onSelectNodes={handleSelectNodes}
+          onToggleSelectNode={handleToggleSelectNode}
+          onUpdateNodesPositions={handleUpdateNodesPositions}
+          onDeleteNodes={handleDeleteNodes}
           onAddEdge={handleAddEdge}
           onDeleteEdge={handleDeleteEdge}
         />
 
-        {selectedNode && (
+        {selectedNodes.length > 0 && (
           <NodeInspector
-            node={selectedNode}
+            selectedNodes={selectedNodes}
             nodes={graph.nodes}
             edges={graph.edges}
             onUpdateNode={handleUpdateNodeData}
-            onDeleteNode={handleDeleteNode}
+            onDeleteNodes={handleDeleteNodes}
             onAddEdge={handleAddEdge}
             onDeleteEdge={handleDeleteEdge}
             onOpenSearch={() => setShowSearchModal(true)}
-            onClose={() => setSelectedNodeId(null)}
+            onClose={() => setSelectedNodeIds([])}
           />
         )}
       </div>
@@ -509,7 +524,7 @@ export function GraphBuilder({ onStageDocuments }: GraphBuilderProps) {
       {/* Store Catalogue Search Modal */}
       {showSearchModal && (
         <CatalogueSearchModal
-          selectedNode={selectedNode}
+          selectedNode={primarySelectedNode}
           onSelectResource={handleSelectCatalogueResource}
           onClose={() => setShowSearchModal(false)}
         />

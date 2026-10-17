@@ -21,7 +21,7 @@ interface NodeCardProps {
   node: GraphNode
   isSelected: boolean
   isConnectingSource: boolean
-  onSelect: (node: GraphNode) => void
+  onSelect: (node: GraphNode, isMulti: boolean) => void
   onDelete: (nodeId: string) => void
   onStartConnect: (node: GraphNode) => void
   onCompleteConnect: (targetNode: GraphNode) => void
@@ -105,9 +105,10 @@ export function NodeCard({
   return (
     <div
       style={cardStyle}
+      onContextMenu={(e) => e.preventDefault()}
       onClick={(e) => {
         e.stopPropagation()
-        onSelect(node)
+        onSelect(node, e.shiftKey || e.ctrlKey || e.metaKey)
       }}
     >
       {/* Node Header */}

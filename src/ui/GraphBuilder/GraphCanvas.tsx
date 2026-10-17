@@ -3,45 +3,57 @@ import {
   useEffect,
   useRef,
   useState,
+  useMemo,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent,
 } from 'react'
 import type { GraphEdge, GraphNode } from '../../graph/types'
+import {
+  getFullyCoveredNodeIds,
+  NODE_HEIGHT,
+  NODE_WIDTH,
+} from '../../graph/selectionUtils'
 import { NodeCard } from './NodeCard'
 
 interface GraphCanvasProps {
   nodes: GraphNode[]
   edges: GraphEdge[]
-  selectedNodeId: string | null
-  onSelectNode: (node: GraphNode | null) => void
-  onUpdateNodePosition: (nodeId: string, x: number, y: number) => void
-  onDeleteNode: (nodeId: string) => void
+  selectedNodeIds: string[]
+  onSelectNodes: (nodeIds: string[]) => void
+  onToggleSelectNode: (nodeId: string) => void
+  onUpdateNodesPositions: (updates: { id: string; x: number; y: number }[]) => void
+  onDeleteNodes: (nodeIds: string[]) => void
   onAddEdge: (sourceId: string, targetId: string) => void
   onDeleteEdge: (edgeId: string) => void
 }
 
-const NODE_WIDTH = 240
-const NODE_HEIGHT = 120
-
 export function GraphCanvas({
   nodes,
   edges,
-  selectedNodeId,
-  onSelectNode,
-  onUpdateNodePosition,
-  onDeleteNode,
+  selectedNodeIds,
+  onSelectNodes,
+  onToggleSelectNode,
+  onUpdateNodesPositions,
+  onDeleteNodes,
   onAddEdge,
   onDeleteEdge,
 }: GraphCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null)
 
-  // Dragging state for nodes
-  const [draggingNode, setDraggingNode] = useState<{
-    id: string
+  // Dragging state for multiple nodes
+  const [draggingNodesState, setDraggingNodesState] = useState<{
     startX: number
     startY: number
-    origX: number
-    origY: number
+    nodePositions: Map<string, { origX: number; origY: number }>
+  } | null>(null)
+
+  // Selection box state (Right-click or Shift+Left-click drag marquee)
+  const [selectionBox, setSelectionBox] = useState<{
+    startX: number
+    startY: number
+    currentX: number
+    currentY: number
+    isRightClick: boolean
   } | null>(null)
 
   // Connecting state between ports
@@ -112,16 +124,55 @@ export function GraphCanvas({
     return () => el.removeEventListener('wheel', handleWheel)
   }, [])
 
+  // Nodes covered by the current selection box (full element cover)
+  const coveredIdsDuringDrag = useMemo(() => {
+    if (!selectionBox) return new Set<string>()
+    return new Set(getFullyCoveredNodeIds(nodes, selectionBox, NODE_WIDTH, NODE_HEIGHT))
+  }, [selectionBox, nodes])
+
+  const handleSelectNode = (node: GraphNode, isMulti: boolean) => {
+    if (isMulti) {
+      onToggleSelectNode(node.id)
+    } else {
+      onSelectNodes([node.id])
+    }
+  }
+
   const handleMouseDownNode = (e: MouseEvent, node: GraphNode) => {
+    if (e.button === 2) {
+      // Right-click down on node initiates marquee selection
+      handleCanvasMouseDown(e)
+      return
+    }
+
     if (isSpacePressed) return // Allow spacebar drag over nodes to pan canvas
     e.stopPropagation()
-    onSelectNode(node)
-    setDraggingNode({
-      id: node.id,
+
+    const isMultiModifier = e.shiftKey || e.ctrlKey || e.metaKey
+
+    if (isMultiModifier) {
+      onToggleSelectNode(node.id)
+    } else if (!selectedNodeIds.includes(node.id)) {
+      onSelectNodes([node.id])
+    }
+
+    const activeIds = selectedNodeIds.includes(node.id)
+      ? selectedNodeIds
+      : [node.id]
+
+    const positions = new Map<string, { origX: number; origY: number }>()
+    for (const id of activeIds) {
+      const n = nodes.find((item) => item.id === id)
+      if (n) {
+        positions.set(id, { origX: n.x, origY: n.y })
+      }
+    }
+    positions.set(node.id, { origX: node.x, origY: node.y })
+
+    setDraggingNodesState({
       startX: e.clientX,
       startY: e.clientY,
-      origX: node.x,
-      origY: node.y,
+      nodePositions: positions,
     })
   }
 
@@ -138,6 +189,24 @@ export function GraphCanvas({
   }
 
   const handleCanvasMouseDown = (e: MouseEvent) => {
+    // 1. Right-click OR Shift+Left-click: Start selection box marquee
+    if (e.button === 2 || (e.button === 0 && e.shiftKey)) {
+      e.preventDefault()
+      const rect = containerRef.current?.getBoundingClientRect()
+      if (!rect) return
+      const mouseX = (e.clientX - rect.left - pan.x) / zoom
+      const mouseY = (e.clientY - rect.top - pan.y) / zoom
+      setSelectionBox({
+        startX: mouseX,
+        startY: mouseY,
+        currentX: mouseX,
+        currentY: mouseY,
+        isRightClick: e.button === 2,
+      })
+      return
+    }
+
+    // 2. Middle-click, Space+Left-click, or Left-click on canvas background: Pan
     const isMiddleClick = e.button === 1
     const isSpaceClick = e.button === 0 && isSpacePressed
     const isBackgroundClick =
@@ -148,7 +217,7 @@ export function GraphCanvas({
 
     if (isMiddleClick || isSpaceClick || isBackgroundClick) {
       if (!isSpaceClick && !isMiddleClick) {
-        onSelectNode(null)
+        onSelectNodes([])
       }
       if (connectingSource) {
         setConnectingSource(null)
@@ -161,14 +230,28 @@ export function GraphCanvas({
 
   const handleMouseMove = useCallback(
     (e: MouseEvent) => {
-      if (draggingNode) {
-        const dx = (e.clientX - draggingNode.startX) / zoom
-        const dy = (e.clientY - draggingNode.startY) / zoom
-        onUpdateNodePosition(
-          draggingNode.id,
-          Math.max(20, Math.round(draggingNode.origX + dx)),
-          Math.max(20, Math.round(draggingNode.origY + dy)),
-        )
+      // Update selection box
+      if (selectionBox && containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect()
+        const mouseX = (e.clientX - rect.left - pan.x) / zoom
+        const mouseY = (e.clientY - rect.top - pan.y) / zoom
+        setSelectionBox((prev) => (prev ? { ...prev, currentX: mouseX, currentY: mouseY } : null))
+        return
+      }
+
+      // Drag multiple nodes
+      if (draggingNodesState) {
+        const dx = (e.clientX - draggingNodesState.startX) / zoom
+        const dy = (e.clientY - draggingNodesState.startY) / zoom
+        const updates: { id: string; x: number; y: number }[] = []
+        draggingNodesState.nodePositions.forEach(({ origX, origY }, id) => {
+          updates.push({
+            id,
+            x: Math.max(20, Math.round(origX + dx)),
+            y: Math.max(20, Math.round(origY + dy)),
+          })
+        })
+        onUpdateNodesPositions(updates)
       } else if (isPanning) {
         setPan({
           x: e.clientX - panStart.x,
@@ -184,11 +267,37 @@ export function GraphCanvas({
         })
       }
     },
-    [draggingNode, isPanning, panStart, pan, zoom, connectingSource, onUpdateNodePosition],
+    [selectionBox, draggingNodesState, isPanning, panStart, pan, zoom, connectingSource, onUpdateNodesPositions],
   )
 
-  const handleMouseUp = () => {
-    setDraggingNode(null)
+  const handleMouseUp = (e: MouseEvent) => {
+    // Finalize selection box
+    if (selectionBox) {
+      const dragDist = Math.hypot(
+        selectionBox.currentX - selectionBox.startX,
+        selectionBox.currentY - selectionBox.startY,
+      )
+
+      if (dragDist > 5) {
+        // Full element cover selection
+        const fullyCoveredIds = getFullyCoveredNodeIds(
+          nodes,
+          selectionBox,
+          NODE_WIDTH,
+          NODE_HEIGHT,
+        )
+
+        if (e.shiftKey || e.ctrlKey || e.metaKey) {
+          const merged = Array.from(new Set([...selectedNodeIds, ...fullyCoveredIds]))
+          onSelectNodes(merged)
+        } else {
+          onSelectNodes(fullyCoveredIds)
+        }
+      }
+      setSelectionBox(null)
+    }
+
+    setDraggingNodesState(null)
     setIsPanning(false)
   }
 
@@ -204,6 +313,13 @@ export function GraphCanvas({
     }
 
     if (isInputActive) return
+
+    // Ctrl+A / Cmd+A: Select all nodes
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
+      e.preventDefault()
+      onSelectNodes(nodes.map((n) => n.id))
+      return
+    }
 
     // Keypad zoom controls
     if (e.key === '+' || e.key === '=' || e.code === 'NumpadAdd') {
@@ -231,18 +347,18 @@ export function GraphCanvas({
       e.preventDefault()
       setPan((p) => ({ ...p, y: p.y - (e.shiftKey ? 120 : 40) }))
     }
-    // Delete/Backspace: delete selected node
-    else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedNodeId) {
+    // Delete/Backspace: delete all selected nodes
+    else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedNodeIds.length > 0) {
       e.preventDefault()
-      onDeleteNode(selectedNodeId)
+      onDeleteNodes(selectedNodeIds)
     }
-    // Escape: cancel connection or deselect
+    // Escape: cancel connection or clear selection
     else if (e.key === 'Escape') {
       if (connectingSource) {
         setConnectingSource(null)
         setMousePos(null)
       } else {
-        onSelectNode(null)
+        onSelectNodes([])
       }
     }
   }
@@ -266,6 +382,7 @@ export function GraphCanvas({
       onMouseUp={handleMouseUp}
       onKeyDown={handleKeyDown}
       onKeyUp={handleKeyUp}
+      onContextMenu={(e) => e.preventDefault()}
       style={{
         flex: 1,
         height: '100%',
@@ -432,15 +549,33 @@ export function GraphCanvas({
           <NodeCard
             key={node.id}
             node={node}
-            isSelected={node.id === selectedNodeId}
+            isSelected={selectedNodeIds.includes(node.id) || coveredIdsDuringDrag.has(node.id)}
             isConnectingSource={connectingSource?.id === node.id}
-            onSelect={onSelectNode}
-            onDelete={onDeleteNode}
+            onSelect={handleSelectNode}
+            onDelete={(id) => onDeleteNodes([id])}
             onStartConnect={handleStartConnect}
             onCompleteConnect={handleCompleteConnect}
             onMouseDownDrag={handleMouseDownNode}
           />
         ))}
+
+        {/* Marquee Selection Box Layer */}
+        {selectionBox && (
+          <div
+            style={{
+              position: 'absolute',
+              left: `${Math.min(selectionBox.startX, selectionBox.currentX)}px`,
+              top: `${Math.min(selectionBox.startY, selectionBox.currentY)}px`,
+              width: `${Math.abs(selectionBox.currentX - selectionBox.startX)}px`,
+              height: `${Math.abs(selectionBox.currentY - selectionBox.startY)}px`,
+              border: '1px dashed var(--ds-color-accent)',
+              background: 'var(--ds-color-surface-muted)',
+              opacity: 0.5,
+              pointerEvents: 'none',
+              zIndex: 50,
+            }}
+          />
+        )}
       </div>
 
       {/* Zoom / Pan Controls Overlay */}

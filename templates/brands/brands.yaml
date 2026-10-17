@@ -1,0 +1,5 @@
+- slug: acme
+  name: Acme Jewels
+  website: https://acme.example
+  country: TN
+  logoUrl: media:acme-logo.png

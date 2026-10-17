@@ -1,0 +1,6 @@
+- slug: winter-2026
+  name: Winter 2026
+  description: Cold season picks
+  startAt: "2026-12-01T00:00:00"
+  endAt: "2027-02-28T23:59:59"
+  isActive: true

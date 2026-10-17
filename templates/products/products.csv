@@ -1,0 +1,3 @@
+slug,name,thumbnailUrl,brand,categories,tags,collections,images,shortDescription,description,specifications,isActive,hasVariants,sku,price,compareAtPrice,weightGrams,stockQuantity,availability
+gold-ring,Gold ring,media:ring-gold-1.jpg,acme,rings|engagement-rings,new-arrival,winter-2026,media:ring-gold-2.jpg|media:ring-gold-3.jpg,18k gold ring,"Hand made, **18k** gold.",Material: gold | Weight: 4 g,true,false,RING-GOLD,320.500,380,4,12,AUTO
+silver-bracelet,Silver bracelet,https://images.example/bracelet.jpg,acme,,best-seller,,,,,,true,true,,,,,,

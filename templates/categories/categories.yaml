@@ -1,0 +1,11 @@
+- slug: rings
+  name: Rings
+  sortOrder: 1
+  isActive: true
+  seoTitle: Silver and gold rings
+  imageUrl: media:rings-cover.jpg
+- slug: engagement-rings
+  name: Engagement rings
+  parent: rings # slug of another category, in this file or already in the store
+  sortOrder: 1
+  isActive: true

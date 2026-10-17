@@ -1,0 +1,4 @@
+[
+  { "sku": "BRACELET-S", "product": "silver-bracelet", "name": "Small (16 cm)", "price": 89, "weightGrams": 12, "stockQuantity": 5, "availability": "AUTO" },
+  { "sku": "BRACELET-M", "product": "silver-bracelet", "name": "Medium (18 cm)", "price": 89, "weightGrams": 14, "stockQuantity": 8, "availability": "AUTO" }
+]

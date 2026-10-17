@@ -1,0 +1,3 @@
+sku,product,name,price,compareAtPrice,weightGrams,stockQuantity,availability
+BRACELET-S,silver-bracelet,Small (16 cm),89.000,,12,5,AUTO
+BRACELET-M,silver-bracelet,Medium (18 cm),89.000,,14,8,AUTO

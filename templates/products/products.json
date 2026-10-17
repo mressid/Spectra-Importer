@@ -1,0 +1,39 @@
+[
+  {
+    "slug": "gold-ring",
+    "name": "Gold ring",
+    "thumbnailUrl": "media:ring-gold-1.jpg",
+    "brand": "acme",
+    "categories": ["rings", "engagement-rings"],
+    "tags": ["new-arrival"],
+    "collections": ["winter-2026"],
+    "images": ["media:ring-gold-2.jpg", "media:ring-gold-3.jpg"],
+    "shortDescription": "18k gold ring",
+    "description": "Hand made, **18k** gold.",
+    "specifications": [
+      { "name": "Material", "value": "gold" },
+      { "name": "Weight", "value": "4 g" }
+    ],
+    "contentBlocks": [
+      { "type": "TEXT", "content": "Made in Tunis." },
+      { "type": "IMAGE", "url": "media:ring-gold-2.jpg", "caption": "Side view" }
+    ],
+    "isActive": true,
+    "hasVariants": false,
+    "sku": "RING-GOLD",
+    "price": 320.5,
+    "compareAtPrice": 380,
+    "weightGrams": 4,
+    "stockQuantity": 12,
+    "availability": "AUTO"
+  },
+  {
+    "slug": "silver-bracelet",
+    "name": "Silver bracelet",
+    "thumbnailUrl": "https://images.example/bracelet.jpg",
+    "brand": "acme",
+    "tags": ["best-seller"],
+    "isActive": true,
+    "hasVariants": true
+  }
+]

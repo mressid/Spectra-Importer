@@ -272,6 +272,11 @@ export function NodeCard({
                     {node.data.mediaType}
                   </span>
                 )}
+                {node.data.reserved && (
+                  <span className="badge info" title="Already bound by name in the store: attached when the product is created, not written into the product row">
+                    Reserved
+                  </span>
+                )}
               </div>
             </div>
           )}

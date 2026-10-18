@@ -193,7 +193,10 @@ export function bundleGraph(graph: ProductGraph): BundleResult {
     const hasVariants = variants.length > 0 || Boolean(data.hasVariants)
 
     // Connected Media
-    const media = findConnectedNodes<MediaNode>(prodNode.id, 'product-media', 'media')
+    const allMedia = findConnectedNodes<MediaNode>(prodNode.id, 'product-media', 'media')
+    // a reserved image is bound by name in the store already and attached when the product is created: it is not written again
+    const media = allMedia.filter((m) => !m.data.reserved)
+    const hasReservedThumbnail = allMedia.some((m) => m.data.reserved && m.data.role === 'thumbnail')
     const thumbMedia = media.find((m) => m.data.role === 'thumbnail')
     const galleryMedia = media
       .filter((m) => m.data.role !== 'thumbnail')
@@ -205,13 +208,16 @@ export function bundleGraph(graph: ProductGraph): BundleResult {
 
     const images = galleryMedia.map((m) => m.data.url || `media:${m.data.fileName}`)
 
-    if (!thumbnailUrl) {
+    if (!thumbnailUrl && !hasReservedThumbnail) {
       issues.push(`Product "${data.slug}" has no thumbnail image (connect a thumbnail media node or provide thumbnailUrl).`)
     }
 
     if (hasVariants) {
       for (const vNode of variants) {
         const vData = vNode.data as VariantNodeData
+        if (!(vData.price > 0)) {
+          issues.push(`Variant "${vData.sku}" has no price yet.`)
+        }
         variantRows.push({
           sku: vData.sku,
           product: data.slug,
@@ -396,6 +402,7 @@ export function createPresetGraph(preset: 'simple' | 'variants' | 'hierarchy' | 
   if (preset === 'empty') {
     return {
       id: `graph-${Date.now()}`,
+      preset: 'empty',
       name: 'New Product Workflow',
       nodes: [],
       edges: [],
@@ -522,6 +529,7 @@ export function createPresetGraph(preset: 'simple' | 'variants' | 'hierarchy' | 
 
     return {
       id: `graph-${Date.now()}`,
+      preset: 'simple',
       name: 'Solitaire Ring Bundle',
       description: 'Single product assembled with brand, category, tags, collection, and media.',
       nodes,
@@ -616,6 +624,7 @@ export function createPresetGraph(preset: 'simple' | 'variants' | 'hierarchy' | 
 
     return {
       id: `graph-${Date.now()}`,
+      preset: 'variants',
       name: 'Variant Product Workflow',
       description: 'Product assembled with multiple variant combinations.',
       nodes,
@@ -683,6 +692,7 @@ export function createPresetGraph(preset: 'simple' | 'variants' | 'hierarchy' | 
 
   return {
     id: `graph-${Date.now()}`,
+    preset: 'hierarchy',
     name: 'Hierarchy Workflow',
     description: 'Hierarchical category tree linked to product.',
     nodes,

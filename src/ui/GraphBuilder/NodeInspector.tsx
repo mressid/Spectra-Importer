@@ -485,6 +485,18 @@ export function NodeInspector({
                 <option value="gallery">Gallery Image</option>
               </select>
             </div>
+
+            <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer', fontSize: 'var(--ds-font-size-small)' }}>
+              <input
+                type="checkbox"
+                checked={Boolean(node.data.reserved)}
+                onChange={(e) => handleFieldChange('reserved', e.target.checked)}
+              />
+              <span>
+                Already bound by name in the store (a pending image): attached when the product is created, so it is not written into
+                the product row.
+              </span>
+            </label>
           </>
         )}
 

@@ -92,6 +92,11 @@ export interface MediaNodeData {
   mediaType?: 'IMAGE' | 'VIDEO'
   role?: 'thumbnail' | 'gallery'
   sortOrder?: number
+  /**
+   * Already bound by name in the store (a pending image): shown on the canvas, but not written into the product row, because the
+   * store attaches it when the product is created. Writing it as well would attach it twice.
+   */
+  reserved?: boolean
 }
 
 export type NodeDataMap = {
@@ -169,6 +174,8 @@ export interface GraphEdge {
 
 export interface ProductGraph {
   id: string
+  /** Set on the built-in sample graphs, so a sample that was never edited can be replaced instead of merged into. */
+  preset?: 'simple' | 'variants' | 'hierarchy' | 'empty'
   name: string
   description?: string
   nodes: GraphNode[]

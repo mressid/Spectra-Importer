@@ -7,7 +7,7 @@
  *   (only characters valid in a folder name on every OS; the older `*:[...]` spelling still works)
  * - Supports individual path-bound order: explicit order in folder (`1/`, `order-2/`),
  *   filename prefixes (`01_front.jpg`), or per-place order (`[ring-a@1, ring-b@2]`)
- * - Extracts roles (THUMBNAIL, GALLERY, BANNER, LOGO, SWATCH)
+ * - Extracts roles (THUMBNAIL, GALLERY: the two the store accepts)
  * - Identifies aspect ratios from folder paths (e.g., `1:1`, `4:5`, `16:9`, `3:4`)
  *   and calculates aspect ratio and orientation from image dimensions (width, height)
  * - Produces individual bindings matching PUT /api/v1/admin/media/bindings
@@ -17,7 +17,8 @@ import { getRelativePath, isMediaFile } from './folderStructure'
 
 export type MediaTargetType = 'product' | 'variant' | 'category' | 'brand' | 'collection' | string
 
-export type MediaRoleType = 'THUMBNAIL' | 'GALLERY' | 'BANNER' | 'LOGO' | 'SWATCH' | string
+/** The store's media library knows two roles; every folder word maps to one of them (see detectRole). */
+export type MediaRoleType = 'THUMBNAIL' | 'GALLERY'
 
 export type ImageOrientation = 'SQUARE' | 'PORTRAIT' | 'LANDSCAPE'
 
@@ -143,37 +144,20 @@ export function parseAspectRatioFromPath(segment: string): string | undefined {
 }
 
 /**
- * Detects media role from string (THUMBNAIL, GALLERY, BANNER, LOGO, SWATCH).
+ * Detects the media role from a folder name or file name. The store knows two roles, so the words map to them:
+ * thumbnail, thumb, cover, main, hero, logo, icon, avatar -> THUMBNAIL (the one main image);
+ * gallery, images, photos, slides, banner, header, swatch, color -> GALLERY (one of several).
  */
 export function detectRole(segmentOrFileName: string): MediaRoleType | undefined {
   const lower = segmentOrFileName.toLowerCase()
-  if (
-    lower.startsWith('thumbnail') ||
-    lower.startsWith('thumb') ||
-    lower.startsWith('cover') ||
-    lower.startsWith('main') ||
-    lower.startsWith('hero')
-  ) {
+  if (['thumbnail', 'thumb', 'cover', 'main', 'hero', 'logo', 'icon', 'avatar'].some((word) => lower.startsWith(word))) {
     return 'THUMBNAIL'
   }
-  if (
-    lower === 'gallery' ||
-    lower === 'images' ||
-    lower === 'photos' ||
-    lower === 'slides' ||
-    lower.startsWith('gallery-') ||
-    lower.startsWith('gallery_')
-  ) {
+  if (['gallery', 'images', 'photos', 'slides'].includes(lower) || lower.startsWith('gallery-') || lower.startsWith('gallery_')) {
     return 'GALLERY'
   }
-  if (lower.startsWith('banner') || lower.startsWith('header')) {
-    return 'BANNER'
-  }
-  if (lower.startsWith('logo') || lower.startsWith('icon') || lower.startsWith('avatar')) {
-    return 'LOGO'
-  }
-  if (lower.startsWith('swatch') || lower.startsWith('color')) {
-    return 'SWATCH'
+  if (['banner', 'header', 'swatch', 'color'].some((word) => lower.startsWith(word))) {
+    return 'GALLERY'
   }
   return undefined
 }
@@ -354,7 +338,8 @@ export function parseMediaFolder(files: File[]): ParseMediaFolderResult {
   const explicitBindingsWithOrder = new Set<MediaBinding>()
 
   // Filter media files
-  const mediaFiles = files.filter((f) => isMediaFile(f.name))
+  // path order, so positions do not depend on the order the browser lists the files in
+  const mediaFiles = files.filter((f) => isMediaFile(f.name)).sort((a, b) => getRelativePath(a).localeCompare(getRelativePath(b)))
 
   for (const file of mediaFiles) {
     const relPath = getRelativePath(file)
@@ -489,23 +474,31 @@ export function parseMediaFolder(files: File[]): ParseMediaFolderResult {
     })
   }
 
-  // Adjust sequential orders for assets grouped by target + name + role where order was not explicitly given
-  const groupCounts = new Map<string, number>()
+  // Positions nobody asked for take the lowest free one of their (kind, name, role) group, in path order;
+  // thumbnails and positions given by a folder, a file name or [name@3] are kept and never collide with them.
+  const slotKey = (b: MediaBinding) => `${b.target}::${b.name}::${b.role}`
+  const taken = new Map<string, Set<number>>()
+  const takenIn = (b: MediaBinding): Set<number> => {
+    const existing = taken.get(slotKey(b))
+    if (existing) return existing
+    const created = new Set<number>()
+    taken.set(slotKey(b), created)
+    return created
+  }
   for (const asset of assets) {
     for (const binding of asset.bindings) {
-      if (binding.role === 'THUMBNAIL') {
-        binding.order = 1
-        continue
-      }
-
-      // If binding did not have explicit order detected
-      if (!explicitBindingsWithOrder.has(binding)) {
-        const key = `${binding.target}::${binding.name}::${binding.role}`
-        const currentCount = groupCounts.get(key) || 0
-        const nextOrder = currentCount + 1
-        groupCounts.set(key, nextOrder)
-        binding.order = nextOrder
-      }
+      if (binding.role === 'THUMBNAIL') binding.order = 1
+      if (binding.role === 'THUMBNAIL' || explicitBindingsWithOrder.has(binding)) takenIn(binding).add(binding.order)
+    }
+  }
+  for (const asset of assets) {
+    for (const binding of asset.bindings) {
+      if (binding.role === 'THUMBNAIL' || explicitBindingsWithOrder.has(binding)) continue
+      const used = takenIn(binding)
+      let next = 1
+      while (used.has(next)) next++
+      binding.order = next
+      used.add(next)
     }
   }
 

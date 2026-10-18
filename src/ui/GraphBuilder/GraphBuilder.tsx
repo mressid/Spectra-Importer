@@ -1,6 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type Dispatch, type SetStateAction } from 'react'
 import type { ImportDocument, ResourceKind } from '../../core/types'
 import { autoLayoutGraph, bundleGraph, createPresetGraph } from '../../graph/bundler'
+import { graphFromDocuments, type RowDocuments } from '../../graph/fromDocuments'
+import { mergeGraphs } from '../../graph/mergeGraph'
+import type { ImageLibrary } from '../../upload/imageLibrary'
+import { useToast } from '../toastContext'
 import type { CatalogueSearchItem } from '../../graph/catalogueSearch'
 import type {
   GraphEdge,
@@ -30,11 +34,20 @@ import { NodeInspector } from './NodeInspector'
 
 interface GraphBuilderProps {
   onStageDocuments: (documents: Partial<Record<ResourceKind, ImportDocument>>) => void
+  /** The graph lives in the app, so what is added from other steps (auto-configure) is here when this one opens. */
+  graph: ProductGraph
+  onGraphChange: Dispatch<SetStateAction<ProductGraph>>
+  /** The rows that are loaded as files: "Load rows" moves them into the graph. */
+  documents: RowDocuments
+  library: ImageLibrary
 }
 
-export function GraphBuilder({ onStageDocuments }: GraphBuilderProps) {
-  const [graph, setGraph] = useState<ProductGraph>(() => createPresetGraph('simple'))
-  const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>(['node-prod-1'])
+export function GraphBuilder({ onStageDocuments, graph, onGraphChange: setGraph, documents, library }: GraphBuilderProps) {
+  const toast = useToast()
+  const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>(() => {
+    const first = graph.nodes.find((n) => n.type === 'product') ?? graph.nodes[0]
+    return first ? [first.id] : []
+  })
   const [showManifestModal, setShowManifestModal] = useState(false)
   const [showSearchModal, setShowSearchModal] = useState(false)
 
@@ -283,6 +296,29 @@ export function GraphBuilder({ onStageDocuments }: GraphBuilderProps) {
     setSelectedNodeIds([targetNode.id])
   }
 
+  const rowsLoaded = Object.values(documents).some((doc) => doc && doc.rows.length > 0)
+
+  /** Moves the rows that are loaded as files into the graph (matching nodes are updated, new ones added), to edit them here. */
+  const handleLoadRows = () => {
+    const loaded = graphFromDocuments(documents, library)
+    if (loaded.graph.nodes.length === 0) {
+      toast.info('There are no product rows to load: load or auto-configure some first.')
+      return
+    }
+    const merged = mergeGraphs(graph, loaded.graph)
+    setGraph(merged.graph)
+    setSelectedNodeIds(merged.touched.slice(0, 1))
+    const c = loaded.counts
+    toast.success(
+      `Rows moved into the graph: ${c.products} product${c.products === 1 ? '' : 's'}, ${c.variants} variant${c.variants === 1 ? '' : 's'}, ${c.media} photo${c.media === 1 ? '' : 's'}` +
+        (merged.updated > 0 ? ` (${merged.updated} already there, updated)` : '') +
+        '. Stage the graph to move the edits back into the rows.',
+    )
+    if (loaded.unsupported.length > 0) {
+      toast.info(`The graph has no place for ${loaded.unsupported.join(', ')}: they stay in the rows but are not in the graph.`)
+    }
+  }
+
   const handleStageToImporter = () => {
     onStageDocuments(bundleResult.documents)
     setShowManifestModal(false)
@@ -456,6 +492,17 @@ export function GraphBuilder({ onStageDocuments }: GraphBuilderProps) {
 
         {/* Right Actions */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <button
+            type="button"
+            className="small"
+            onClick={handleLoadRows}
+            disabled={!rowsLoaded}
+            title={rowsLoaded ? 'Move the product, variant and other rows loaded as files into the graph' : 'No rows are loaded: load files or auto-configure products first'}
+            style={{ gap: '4px' }}
+          >
+            <IconProduct size={13} />
+            Load rows
+          </button>
           <button
             type="button"
             className="small"

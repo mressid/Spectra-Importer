@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { WAITING_TARGETS, type WaitingPlace } from '../upload/waitingMedia'
 import type { SlotTarget } from '../upload/folderTemplate'
-import { IconRefresh, IconSearch } from './Icons'
+import { IconRefresh, IconSearch, IconWorkflow } from './Icons'
 
 interface PendingListProps {
   places: WaitingPlace[]
@@ -10,6 +10,8 @@ interface PendingListProps {
   loading: boolean
   connected: boolean
   onRefresh: () => void
+  /** Put these places and their images in the Graph Builder, to set the rest of their data there. */
+  onAssemble?: (places: WaitingPlace[]) => void
 }
 
 const LABEL: Record<SlotTarget, string> = { product: 'Products', variant: 'Variants', category: 'Categories', brand: 'Brands' }
@@ -19,7 +21,7 @@ const MAX_ROWS = 300
  * The main view of the Images step: photos already in the store and bound to a slug or SKU whose product, variant,
  * category or brand has not been created yet. Uploading is in the side panel; what it binds shows up here.
  */
-export function PendingList({ places, loaded, loading, connected, onRefresh }: PendingListProps) {
+export function PendingList({ places, loaded, loading, connected, onRefresh, onAssemble }: PendingListProps) {
   const [kind, setKind] = useState<SlotTarget | 'all'>('all')
   const [query, setQuery] = useState('')
 
@@ -70,6 +72,17 @@ export function PendingList({ places, loaded, loading, connected, onRefresh }: P
                 </button>
               ))}
             </div>
+            {onAssemble && shown.length > 0 && (
+              <button
+                className="small"
+                type="button"
+                onClick={() => onAssemble(shown)}
+                title="Put every place in this list, with its images, in the Graph Builder"
+              >
+                <IconWorkflow size={14} />
+                Assemble {shown.length === places.length ? 'all' : shown.length} in graph
+              </button>
+            )}
             <label className="pending-search">
               <IconSearch size={14} />
               <input type="search" placeholder="Find a slug or SKU" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Find a slug or SKU" />
@@ -82,22 +95,33 @@ export function PendingList({ places, loaded, loading, connected, onRefresh }: P
               const parts = [place.thumbnail ? 'thumbnail' : null, place.gallery.length > 0 ? `${place.gallery.length} gallery` : null].filter(Boolean)
               return (
                 <li key={`${place.target}/${place.name}`} className="pending-row">
-                  <div className="pending-strip">
-                    {images.slice(0, 5).map((m) =>
-                      m.mediaType === 'IMAGE' ? (
-                        <img key={`${m.role}${m.order}`} src={m.url} alt="" width={56} height={56} className="pending-thumb" />
-                      ) : (
-                        <span key={`${m.role}${m.order}`} className="pending-thumb" aria-hidden="true" />
-                      ),
-                    )}
-                    {images.length > 5 && <span className="pending-more">+{images.length - 5}</span>}
-                  </div>
                   <div className="pending-text">
                     <code className="pending-name">{place.name}</code>
                     <span className="pending-meta">
                       {place.target} · {parts.join(' + ')}
                     </span>
                   </div>
+                  <div className="pending-strip">
+                    {images.slice(0, 5).map((m, i) =>
+                      m.mediaType === 'IMAGE' ? (
+                        <img key={`${m.uploadedFileId}|${m.role}${m.order}|${i}`} src={m.url} alt="" width={56} height={56} className="pending-thumb" />
+                      ) : (
+                        <span key={`${m.uploadedFileId}|${m.role}${m.order}|${i}`} className="pending-thumb" aria-hidden="true" />
+                      ),
+                    )}
+                    {images.length > 5 && <span className="pending-more">+{images.length - 5}</span>}
+                  </div>
+                  {onAssemble && (
+                    <button
+                      className="small"
+                      type="button"
+                      onClick={() => onAssemble([place])}
+                      title={`Put ${place.name} and its images in the Graph Builder, to set its price and the rest there`}
+                    >
+                      <IconWorkflow size={14} />
+                      Assemble in graph
+                    </button>
+                  )}
                   <span
                     className={`badge ${place.inFiles ? 'success' : 'warning'}`}
                     title={place.inFiles ? 'A row of your loaded data files has this name: importing it attaches the images' : 'No loaded data file has a row with this name'}

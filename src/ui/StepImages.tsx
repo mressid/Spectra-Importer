@@ -1,11 +1,15 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ImportDocument, ResourceKind } from '../core/types'
 import {
   isLoggedIn,
-  setMediaBindings,
   type WaitingMedia,
   type MediaBindingStatusDto,
 } from '../upload/api'
+import { bindAssets } from '../upload/bindAssets'
+import { buildDropPlan, type DropPlan } from '../upload/dropPlan'
+import type { StoreKind } from '../upload/bindingRules'
+import { detectProductFolders } from '../upload/detectProductFolders'
+import { dragHasFiles, normalizeDropRoot, readDroppedFiles } from '../upload/dropFiles'
 import { EXAMPLE_COMBOS, exampleComboZip } from '../upload/exampleCombos'
 import {
   buildFolderTemplate,
@@ -15,15 +19,15 @@ import {
   type FolderTemplateSource,
   type SlotTarget,
 } from '../upload/folderTemplate'
-import { groupWaiting, knownNames, TEMPLATE_OF, waitingDataCsv, withoutRow } from '../upload/waitingMedia'
+import { groupWaiting, knownNames, type WaitingPlace, TEMPLATE_OF, waitingDataCsv, withoutRow } from '../upload/waitingMedia'
 import {
   generateRowsFromStructuredProduct,
   isMediaFile,
-  parseStructuredFolder,
   type StructuredProductFolder,
 } from '../upload/folderStructure'
 import type { ImageLibrary } from '../upload/imageLibrary'
 import { addToLibrary, saveLibrary } from '../upload/imageLibrary'
+import { describeFailure, describeNoMedia, groupFailures } from '../upload/uploadReport'
 import {
   calculateAspectRatio,
   parseMediaFolder,
@@ -44,10 +48,13 @@ import {
   IconTrash,
   IconUpload,
   IconVariant,
+  IconWorkflow,
 } from './Icons'
 import { getMediaLibraryDoc } from './docsData'
 import { DownloadMenu, type DownloadMenuGroup } from './DownloadMenu'
+import { DropPreview } from './DropPreview'
 import { PendingList } from './PendingList'
+import { useToast } from './toastContext'
 import { saveFile } from './saveFile'
 import { MarkdownViewer } from './MarkdownViewer'
 
@@ -57,13 +64,29 @@ interface StepImagesProps {
   onNext: () => void
   /** Rows loaded in the Files step: they name the folders of the downloadable folder template. */
   documents?: Partial<Record<ResourceKind, ImportDocument | undefined>>
+  /** What already exists in the store (slug / SKU -> id), for the review of a drop; empty until it is loaded. */
+  storeIndex?: Partial<Record<ResourceKind, Map<string, string>>>
   /** Images uploaded and bound by name that wait for their product, variant... to be created; null = not loaded yet. */
   waiting?: WaitingMedia[] | null
   onRefreshWaiting?: () => Promise<void>
   onAutoConfigure?: (productDoc: ImportDocument, variantDoc?: ImportDocument) => void
+  /** Start a configuration in the Graph Builder from these product folders (their photos and variants placed on the canvas). */
+  onConfigureInGraph?: (folders: StructuredProductFolder[]) => void
+  /** Assemble pending images (the place they wait for, with them) in the Graph Builder. */
+  onAssemblePending?: (places: WaitingPlace[]) => void
 }
 
 const UPLOAD_KEY = 'store-importer.upload-panel-open'
+const PREVIEW_KEY = 'store-importer.review-before-upload'
+
+/** A drop is reviewed before it is uploaded, unless the user turned that off. */
+function readPreviewFirst(): boolean {
+  try {
+    return localStorage.getItem(PREVIEW_KEY) !== '0'
+  } catch {
+    return true
+  }
+}
 
 /** The upload panel is open unless the user closed it. */
 function readUploadOpen(): boolean {
@@ -80,57 +103,12 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-async function getFilesFromDataTransfer(dataTransfer: DataTransfer): Promise<File[]> {
-  const files: File[] = []
-  const items = Array.from(dataTransfer.items || [])
-
-  async function traverseEntry(entry: FileSystemEntry, path = ''): Promise<void> {
-    if (entry.isFile) {
-      const fileEntry = entry as FileSystemFileEntry
-      await new Promise<void>((resolve) => {
-        fileEntry.file(
-          (file) => {
-            const relativePath = path ? `${path}/${file.name}` : file.name
-            Object.defineProperty(file, 'relativePath', { value: relativePath, writable: false })
-            files.push(file)
-            resolve()
-          },
-          () => resolve(),
-        )
-      })
-    } else if (entry.isDirectory) {
-      const dirEntry = entry as FileSystemDirectoryEntry
-      const dirReader = dirEntry.createReader()
-      const entries = await new Promise<FileSystemEntry[]>((resolve) => {
-        dirReader.readEntries(
-          (results) => resolve(Array.from(results)),
-          () => resolve([]),
-        )
-      })
-      const nextPath = path ? `${path}/${entry.name}` : entry.name
-      for (const child of entries) {
-        await traverseEntry(child, nextPath)
-      }
-    }
-  }
-
-  const entries = items
-    .map((item) => (item.webkitGetAsEntry ? item.webkitGetAsEntry() : null))
-    .filter((entry): entry is FileSystemEntry => entry !== null && entry !== undefined)
-
-  if (entries.length > 0) {
-    for (const entry of entries) {
-      await traverseEntry(entry)
-    }
-    return files
-  }
-
-  return Array.from(dataTransfer.files || [])
-}
-
-export function StepImages({ library, onLibraryChange, onNext, documents, waiting, onRefreshWaiting, onAutoConfigure }: StepImagesProps) {
+export function StepImages({ library, onLibraryChange, onNext, documents, storeIndex, waiting, onRefreshWaiting, onAutoConfigure, onConfigureInGraph, onAssemblePending }: StepImagesProps) {
   const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(null)
-  const [failures, setFailures] = useState<{ fileName: string; error: string }[]>([])
+  const toast = useToast()
+  const [plan, setPlan] = useState<DropPlan | null>(null)
+  const [previewFirst, setPreviewFirst] = useState<boolean>(readPreviewFirst)
+  const previewRef = useRef<HTMLDivElement>(null)
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
   const [isDragOver, setIsDragOver] = useState(false)
   const [detectedProducts, setDetectedProducts] = useState<StructuredProductFolder[]>([])
@@ -192,6 +170,10 @@ export function StepImages({ library, onLibraryChange, onNext, documents, waitin
       })),
     [waiting, documents],
   )
+
+  useEffect(() => {
+    if (plan) previewRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' })
+  }, [plan])
 
   const handleRefreshWaiting = async () => {
     if (!onRefreshWaiting) return
@@ -283,107 +265,153 @@ export function StepImages({ library, onLibraryChange, onNext, documents, waitin
     },
   ]
 
-  const processFiles = async (dropped: File[]) => {
-    // README.txt and other non-media files of a dropped folder are not images: do not send them to the store
-    const files = dropped.filter((file) => isMediaFile(file.name))
-    if (files.length === 0) return
-
-    setFailures([])
-    setBindingSyncSummary(null)
-
-    // Check media library folder structure (targets, multi-name [a, b], roles, aspect ratios, orders)
-    const mediaParsed = parseMediaFolder(files)
-    if (mediaParsed.assets.length > 0) {
-      setMediaFolderResult(mediaParsed)
+  /** Tells the user what a bind run did: errors one by one (grouped by message), the result as one line. */
+  const reportBinding = (report: Awaited<ReturnType<typeof bindAssets>>) => {
+    const byMessage = new Map<string, string[]>()
+    for (const failure of report.failed) byMessage.set(failure.message, [...(byMessage.get(failure.message) ?? []), failure.fileName])
+    for (const [message, files] of byMessage) {
+      toast.error(files.length === 1 ? `${files[0]} was not bound: ${message}` : `${files.length} files were not bound: ${message} (${files.slice(0, 2).join(', ')}${files.length > 2 ? ` and ${files.length - 2} more` : ''})`)
     }
-
-    // Check legacy product/variants structure
-    const parsed = parseStructuredFolder(files)
-    if (parsed.products.length > 0) {
-      setDetectedProducts(parsed.products)
+    if (report.applied + report.waiting > 0) {
+      toast.success(
+        `${report.applied} binding${report.applied === 1 ? '' : 's'} applied now` +
+          (report.waiting > 0 ? `, ${report.waiting} waiting for their product, variant, category or brand to be created` : ''),
+      )
     }
-
-    setUploadProgress({ done: 0, total: files.length })
-
-    const updatedLibrary = new Map(library)
-    const outcomes = await addToLibrary(files, updatedLibrary, {
-      onProgress: (done, total) => {
-        setUploadProgress({ done, total })
-      },
-    })
-
-    const newFailures = outcomes
-      .filter((o) => !o.ok)
-      .map((o) => ({ fileName: o.fileName, error: (o as { error: string }).error }))
-
-    setFailures(newFailures)
-    setUploadProgress(null)
-    onLibraryChange(updatedLibrary)
   }
 
+  /** What a drop contains, as the review and the upload need it: the places that exist in the store and the rows of the loaded files. */
+  const planContext = () => {
+    const names = (kind: ResourceKind) => (storeIndex?.[kind] ? new Set(storeIndex[kind].keys()) : undefined)
+    const existing: Partial<Record<StoreKind, ReadonlySet<string>>> = {}
+    const pairs: [StoreKind, ResourceKind][] = [['product', 'products'], ['variant', 'variants'], ['category', 'categories'], ['brand', 'brands']]
+    for (const [kind, resource] of pairs) {
+      const set = names(resource)
+      if (set && set.size > 0) existing[kind] = set
+    }
+    return { existing, inFiles: knownNames({ products: documents?.products, variants: documents?.variants, categories: documents?.categories, brands: documents?.brands }) }
+  }
+
+  /** A drop or a pick: say what is wrong at once, otherwise show the review (or upload straight away when the user turned it off). */
+  const stageFiles = (picked: File[], unreadable: string[] = []) => {
+    for (const message of unreadable) toast.error(message)
+    // a picked and a dragged folder give the same paths, and a folder that holds products is never taken for one
+    const dropped = normalizeDropRoot(picked)
+    if (dropped.length === 0) {
+      if (unreadable.length === 0) toast.error('Nothing to upload: no file was found in what you dropped.')
+      return
+    }
+    if (!dropped.some((file) => isMediaFile(file.name))) {
+      toast.error(describeNoMedia(dropped))
+      return
+    }
+    const next = buildDropPlan(dropped, planContext())
+    if (previewFirst) {
+      setPlan(next)
+      return
+    }
+    void applyPlan(next)
+  }
+
+  /** Uploads what the review shows (the files the store would refuse stay out) and binds each one as planned. */
+  const applyPlan = async (reviewed: DropPlan) => {
+    setPlan(null)
+    if (reviewed.ignored.length > 0) toast.info(`${reviewed.ignored.length} file${reviewed.ignored.length === 1 ? ' is' : 's are'} not an image or video and ${reviewed.ignored.length === 1 ? 'was' : 'were'} left out.`)
+    const refused = reviewed.files.filter((f) => !f.ready)
+    for (const file of refused.slice(0, 3)) toast.error(`${file.relPath} was skipped: ${file.problems.join('; ')}`)
+    if (refused.length > 3) toast.error(`${refused.length - 3} more files were skipped because the store would refuse them.`)
+    const ready = reviewed.files.filter((f) => f.ready)
+    if (ready.length === 0) {
+      toast.error('Nothing to upload: the store would refuse every file.')
+      return
+    }
+    if (!isLoggedIn()) {
+      toast.error('Connect to the store first: uploading needs a login (Connect tab).')
+      return
+    }
+    await uploadFiles(ready.map((f) => f.file), reviewed)
+  }
+
+  const uploadFiles = async (files: File[], reviewed: DropPlan) => {
+    setBindingSyncSummary(null)
+    try {
+      // Check media library folder structure (targets, multi-name [a, b], roles, aspect ratios, orders)
+      const mediaParsed = parseMediaFolder(files)
+      // the positions the review showed, not new ones worked out from the files left after the refused ones were dropped
+      const planned = new Map(reviewed.files.map((f) => [f.relPath, f]))
+      for (const asset of mediaParsed.assets) {
+        const reviewedFile = planned.get(asset.relativePath)
+        if (reviewedFile) asset.bindings = reviewedFile.bindings
+      }
+      if (mediaParsed.assets.length > 0) {
+        setMediaFolderResult(mediaParsed)
+      }
+
+      // product folders (the folder layout or the media library layout), to start a configuration from
+      const folders = detectProductFolders(files)
+      if (folders.length > 0) {
+        setDetectedProducts(folders)
+      }
+
+      setUploadProgress({ done: 0, total: files.length })
+
+      const updatedLibrary = new Map(library)
+      const outcomes = await addToLibrary(files, updatedLibrary, {
+        onProgress: (done, total) => {
+          setUploadProgress({ done, total })
+        },
+      })
+      setUploadProgress(null)
+      onLibraryChange(updatedLibrary)
+
+      for (const group of groupFailures(outcomes)) toast.error(describeFailure(group))
+      const uploaded = outcomes.filter((o) => o.ok).length
+      if (uploaded > 0) toast.success(`${uploaded} file${uploaded === 1 ? '' : 's'} uploaded.`)
+
+      // dropping a folder also puts every file in its place: no second click
+      if (uploaded > 0 && mediaParsed.assets.length > 0) {
+        setIsSyncingBindings(true)
+        const report = await bindAssets(mediaParsed.assets, updatedLibrary)
+        setIsSyncingBindings(false)
+        setBindingStatuses((current) => new Map([...current, ...report.statuses]))
+        reportBinding(report)
+        await onRefreshWaiting?.()
+      }
+    } catch (error) {
+      setUploadProgress(null)
+      setIsSyncingBindings(false)
+      toast.error(`The drop failed: ${(error as Error).message}`)
+    }
+  }
+
+  /** Bind again what the last drop contains (after a failure was fixed in the store, or a place was created). */
   const handleSyncBindings = async () => {
     if (!mediaFolderResult || mediaFolderResult.assets.length === 0) return
+    if (!isLoggedIn()) {
+      toast.error('Connect to the store first (Connect tab).')
+      return
+    }
     setIsSyncingBindings(true)
     setBindingSyncSummary(null)
-
-    const updatedStatuses = new Map(bindingStatuses)
-    let appliedCount = 0
-    let waitingCount = 0
-    let failedCount = 0
-
-    for (const asset of mediaFolderResult.assets) {
-      if (asset.bindings.length === 0) continue
-
-      // Look up image in library by relativePath or fileName
-      const image = library.get(asset.relativePath) || library.get(asset.fileName)
-      if (!image?.id) continue
-
-      try {
-        const statuses = await setMediaBindings({
-          uploadedFileId: image.id,
-          bindings: asset.bindings,
-        })
-        updatedStatuses.set(String(image.id), statuses)
-        updatedStatuses.set(asset.relativePath, statuses)
-
-        for (const st of statuses) {
-          if (st.status === 'APPLIED') appliedCount++
-          else if (st.status === 'WAITING') waitingCount++
-        }
-      } catch {
-        failedCount++
-      }
+    try {
+      const report = await bindAssets(mediaFolderResult.assets, library)
+      setBindingStatuses((current) => new Map([...current, ...report.statuses]))
+      reportBinding(report)
+      await onRefreshWaiting?.()
+    } catch (error) {
+      toast.error(`Sync failed: ${(error as Error).message}`)
+    } finally {
+      setIsSyncingBindings(false)
     }
-
-    setBindingStatuses(updatedStatuses)
-    setIsSyncingBindings(false)
-    setBindingSyncSummary(
-      `Bindings synced: ${appliedCount} applied immediately, ${waitingCount} waiting in pending_media${
-        failedCount > 0 ? `, ${failedCount} errors` : ''
-      }`,
-    )
   }
 
-  const handleAutoConfigure = (product: StructuredProductFolder) => {
-    if (!onAutoConfigure) return
-
-    const { productRow, variantRows } = generateRowsFromStructuredProduct(product)
-
-    const productDoc: ImportDocument = {
-      template: 'products',
-      version: 1,
-      rows: [productRow],
-    }
-
-    let variantDoc: ImportDocument | undefined
-    if (variantRows.length > 0) {
-      variantDoc = {
-        template: 'variants',
-        version: 1,
-        rows: variantRows,
-      }
-    }
-
+  /** Rows (and graph nodes, in the app) for these product folders: the same SKU, price placeholder and images in both. */
+  const handleAutoConfigure = (products: StructuredProductFolder[]) => {
+    if (!onAutoConfigure || products.length === 0) return
+    const generated = products.map((product) => generateRowsFromStructuredProduct(product))
+    const productDoc: ImportDocument = { template: 'products', version: 1, rows: generated.map((g) => g.productRow) }
+    const variantRows = generated.flatMap((g) => g.variantRows)
+    const variantDoc: ImportDocument | undefined = variantRows.length > 0 ? { template: 'variants', version: 1, rows: variantRows } : undefined
     onAutoConfigure(productDoc, variantDoc)
   }
 
@@ -417,7 +445,26 @@ export function StepImages({ library, onLibraryChange, onNext, documents, waitin
   }, [mediaFolderResult])
 
   return (
-    <div className="images-layout">
+    <div
+      className={`images-layout ${isDragOver ? 'drop-active' : ''}`}
+      // a folder dropped anywhere on the step is taken (not only on the small drop zone, and never opened by the browser)
+      onDragOver={(e) => {
+        if (!dragHasFiles(e.dataTransfer)) return
+        e.preventDefault()
+        setIsDragOver(true)
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setIsDragOver(false)
+      }}
+      onDrop={(e) => {
+        if (!dragHasFiles(e.dataTransfer)) return
+        e.preventDefault()
+        setIsDragOver(false)
+        // read before anything is awaited: the browser empties the drop as soon as this handler returns
+        const reading = readDroppedFiles(e.dataTransfer)
+        void reading.then(({ files, errors }) => stageFiles(files, errors))
+      }}
+    >
     <div className="card images-main">
       <div className="step-header">
         <div className="step-header-text">
@@ -490,12 +537,19 @@ export function StepImages({ library, onLibraryChange, onNext, documents, waitin
         </div>
       )}
 
+      {plan && (
+        <div ref={previewRef}>
+          <DropPreview plan={plan} connected={isLoggedIn()} busy={uploadProgress !== null} onApply={() => void applyPlan(plan)} onCancel={() => setPlan(null)} />
+        </div>
+      )}
+
       <PendingList
         places={waitingPlaces}
         loaded={waiting !== null && waiting !== undefined}
         loading={waitingLoading}
         connected={isLoggedIn()}
         onRefresh={handleRefreshWaiting}
+        onAssemble={onAssemblePending}
       />
     </div>
     {uploadOpen && (
@@ -506,23 +560,25 @@ export function StepImages({ library, onLibraryChange, onNext, documents, waitin
             <IconClose size={14} />
           </button>
         </div>
-      <div
-        className={`dropzone ${isDragOver ? 'dragover' : ''}`}
-        onDragOver={(e) => {
-          e.preventDefault()
-          setIsDragOver(true)
-        }}
-        onDragLeave={() => setIsDragOver(false)}
-        onDrop={async (e) => {
-          e.preventDefault()
-          setIsDragOver(false)
-          const files = await getFilesFromDataTransfer(e.dataTransfer)
-          processFiles(files)
-        }}
-        style={{ marginBottom: '16px' }}
-      >
+      <label className="review-toggle">
+        <input
+          type="checkbox"
+          checked={previewFirst}
+          onChange={(e) => {
+            setPreviewFirst(e.target.checked)
+            try {
+              localStorage.setItem(PREVIEW_KEY, e.target.checked ? '1' : '0')
+            } catch {
+              // storage blocked: the choice only lasts for this visit
+            }
+          }}
+        />
+        Review what a drop will do before uploading
+      </label>
+
+      <div className={`dropzone ${isDragOver ? 'dragover' : ''}`} style={{ marginBottom: '16px' }}>
         <p style={{ fontWeight: 600, marginBottom: '8px' }}>
-          Select or drop a structured media folder (or files)
+          Select a structured media folder (or files), or drop it anywhere on this page
         </p>
         <p style={{ color: 'var(--ds-color-text-secondary)', fontSize: 'var(--ds-font-size-small)', marginBottom: '12px' }}>
           Supports: <code>[ring-a, ring-b]/gallery/01.jpg</code>, <code>category/rings/16x9/banner.jpg</code>, <code>product/slug/thumbnail.png</code>
@@ -556,7 +612,7 @@ export function StepImages({ library, onLibraryChange, onNext, documents, waitin
         accept="image/*,video/mp4,video/webm"
         style={{ display: 'none' }}
         onChange={(e) => {
-          if (e.target.files) processFiles(Array.from(e.target.files))
+          if (e.target.files) stageFiles(Array.from(e.target.files))
           e.target.value = ''
         }}
       />
@@ -569,7 +625,7 @@ export function StepImages({ library, onLibraryChange, onNext, documents, waitin
         multiple
         style={{ display: 'none' }}
         onChange={(e) => {
-          if (e.target.files) processFiles(Array.from(e.target.files))
+          if (e.target.files) stageFiles(Array.from(e.target.files))
           e.target.value = ''
         }}
       />
@@ -748,9 +804,15 @@ export function StepImages({ library, onLibraryChange, onNext, documents, waitin
                 Product Folders Detected ({detectedProducts.length})
               </h3>
               <span style={{ fontSize: 'var(--ds-font-size-small)', color: 'var(--ds-color-text-secondary)' }}>
-                Optionally generate product and variant records from folder layout.
+                Auto-configure makes each product with a SKU, its photos and its variants, both as rows and in the Graph Builder, ready to edit there (the price is a placeholder to change).
               </span>
             </div>
+            {onAutoConfigure && detectedProducts.length > 1 && (
+              <button className="primary small" type="button" onClick={() => handleAutoConfigure(detectedProducts)}>
+                <IconWorkflow size={14} />
+                Auto-configure all {detectedProducts.length}
+              </button>
+            )}
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -787,31 +849,32 @@ export function StepImages({ library, onLibraryChange, onNext, documents, waitin
                   </div>
                 </div>
 
-                {onAutoConfigure && (
-                  <button
-                    className="primary small"
-                    type="button"
-                    onClick={() => handleAutoConfigure(p)}
-                  >
-                    Auto-configure Product & Variants
-                  </button>
-                )}
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  {onAutoConfigure && (
+                    <button
+                      className="primary small"
+                      type="button"
+                      onClick={() => handleAutoConfigure([p])}
+                      title="Adds the product (and its variants) with a SKU and these photos to the rows and to the Graph Builder"
+                    >
+                      <IconWorkflow size={14} />
+                      Auto-configure
+                    </button>
+                  )}
+                  {onConfigureInGraph && (
+                    <button
+                      className="small"
+                      type="button"
+                      onClick={() => onConfigureInGraph([p])}
+                      title="Only in the Graph Builder, without rows and without a placeholder price"
+                    >
+                      Graph only
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
           </div>
-        </div>
-      )}
-
-      {failures.length > 0 && (
-        <div style={{ marginBottom: '16px' }}>
-          <h3 style={{ color: 'var(--ds-color-error)' }}>Upload Warnings</h3>
-          <ul style={{ margin: 0, paddingLeft: '20px', color: 'var(--ds-color-error)', fontSize: 'var(--ds-font-size-small)' }}>
-            {failures.map((f, i) => (
-              <li key={i}>
-                <strong>{f.fileName}:</strong> {f.error}
-              </li>
-            ))}
-          </ul>
         </div>
       )}
 

@@ -36,4 +36,12 @@ describe('PendingList', () => {
     expect(render({ loaded: false })).toContain('Not loaded yet')
     expect(render({ loaded: false, connected: false })).toContain('Connect to the store')
   })
+
+  it('has an "Assemble in graph" button on each row, and one for everything shown, only when the app can assemble', () => {
+    const places = groupWaiting([item('product', 'ring-a', 'THUMBNAIL', 1), item('variant', 'SKU-1', 'GALLERY', 1)])
+    const withButtons = render({ places, onAssemble: noop })
+    expect(withButtons.match(/Assemble in graph/g)).toHaveLength(2)
+    expect(withButtons).toContain('Assemble all in graph')
+    expect(render({ places })).not.toContain('Assemble')
+  })
 })

@@ -23,6 +23,16 @@ import { reservedThumbnailSlugs } from '../upload/waitingMedia'
 import { StepImport } from './StepImport'
 import { TokenStatusWidget } from './TokenStatusWidget'
 import { GraphBuilder } from './GraphBuilder/GraphBuilder'
+import { createPresetGraph } from '../graph/bundler'
+import { graphFromDocuments } from '../graph/fromDocuments'
+import { graphFromProductFolders } from '../graph/fromFolders'
+import { graphFromPending } from '../graph/fromPending'
+import { mergeGraphs } from '../graph/mergeGraph'
+import type { ProductGraph } from '../graph/types'
+import { mergeRows } from '../upload/mergeRows'
+import type { WaitingPlace } from '../upload/waitingMedia'
+import type { StructuredProductFolder } from '../upload/folderStructure'
+import { useToast } from './toastContext'
 import { DocumentationView } from './DocumentationView'
 
 export function App() {
@@ -37,6 +47,9 @@ export function App() {
   const [storeIndexLoading, setStoreIndexLoading] = useState(false)
   /** Images uploaded and bound by name that wait for their product, variant... to be created; null = not loaded. */
   const [waitingMedia, setWaitingMedia] = useState<WaitingMedia[] | null>(null)
+  /** The product graph. It lives here so that products added from other steps (auto-configure) are in it when the builder opens. */
+  const [graph, setGraph] = useState<ProductGraph>(() => createPresetGraph('simple'))
+  const toast = useToast()
   const reservedThumbnails = useMemo(() => reservedThumbnailSlugs(waitingMedia ?? []), [waitingMedia])
 
   const [conflictMode, setConflictMode] = useState<ConflictMode>('skip')
@@ -91,6 +104,20 @@ export function App() {
     listWaitingMedia()
       .then((items) => {
         if (!cancelled) setWaitingMedia(items)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [connectedUser])
+
+  // a restored session: read what exists in the store once, so the review of a dropped folder can say which places are there
+  useEffect(() => {
+    if (!connectedUser) return
+    let cancelled = false
+    loadStoreIndex()
+      .then((index) => {
+        if (!cancelled) setStoreIndex(index)
       })
       .catch(() => {})
     return () => {
@@ -308,6 +335,17 @@ export function App() {
 
           {activeTab === 'builder' && (
             <GraphBuilder
+              graph={graph}
+              onGraphChange={setGraph}
+              library={library}
+              documents={{
+                products: files.products?.document,
+                variants: files.variants?.document,
+                categories: files.categories?.document,
+                brands: files.brands?.document,
+                tags: files.tags?.document,
+                collections: files.collections?.document,
+              }}
               onStageDocuments={(documents) => {
                 const updated = { ...files }
                 for (const [k, doc] of Object.entries(documents)) {
@@ -331,6 +369,33 @@ export function App() {
               library={library}
               onLibraryChange={setLibrary}
               onNext={() => setActiveTab('products')}
+              onAssemblePending={(places: WaitingPlace[]) => {
+                const assembled = graphFromPending(places)
+                setGraph((current) => mergeGraphs(current, assembled.graph).graph)
+                setActiveTab('builder')
+                const parts = [
+                  assembled.products > 0 ? `${assembled.products} product${assembled.products === 1 ? '' : 's'} with ${assembled.photos} image${assembled.photos === 1 ? '' : 's'}` : '',
+                  assembled.variants > 0 ? `${assembled.variants} variant${assembled.variants === 1 ? '' : 's'}` : '',
+                  assembled.categories > 0 ? `${assembled.categories} categor${assembled.categories === 1 ? 'y' : 'ies'}` : '',
+                  assembled.brands > 0 ? `${assembled.brands} brand${assembled.brands === 1 ? '' : 's'}` : '',
+                ].filter(Boolean)
+                toast.success(`Assembled in the graph: ${parts.join(', ')}. Set the price and the rest there; the pending images are attached when it is created.`)
+                if (assembled.otherPhotos > 0) {
+                  toast.info(`${assembled.otherPhotos} image${assembled.otherPhotos === 1 ? '' : 's'} of variants, categories or brands are not drawn (the graph has no node for them): the store attaches them when the record is created.`)
+                }
+              }}
+              onConfigureInGraph={(folders: StructuredProductFolder[]) => {
+                const started = graphFromProductFolders(folders, library)
+                setGraph((current) => mergeGraphs(current, started.graph).graph)
+                setActiveTab('builder')
+                toast.success(
+                  `Graph started with ${started.products} product${started.products === 1 ? '' : 's'}, ${started.media} photo${started.media === 1 ? '' : 's'} and ${started.variants} variant${started.variants === 1 ? '' : 's'}. Set the price, brand and categories on the canvas.`,
+                )
+                if (started.variantPhotos > 0) {
+                  toast.info(`${started.variantPhotos} variant photo${started.variantPhotos === 1 ? '' : 's'} are not in the graph (it has no variant images): drop the folder to bind them to their variants.`)
+                }
+              }}
+              storeIndex={storeIndex}
               waiting={waitingMedia}
               onRefreshWaiting={refreshWaitingMedia}
               documents={{
@@ -340,21 +405,22 @@ export function App() {
                 brands: files.brands?.document,
               }}
               onAutoConfigure={(productDoc, variantDoc) => {
+                // the same products, with the same SKUs and images, go to the rows (Files step) and into the graph
                 const updated = { ...files }
-                updated.products = {
-                  name: `${String(productDoc.rows[0].slug)}.json`,
-                  text: JSON.stringify(productDoc.rows),
-                  document: productDoc,
-                }
+                const products = mergeRows(files.products?.document, productDoc)
+                updated.products = { name: files.products?.name ?? 'auto-configured-products.json', text: JSON.stringify(products.document.rows), document: products.document }
                 if (variantDoc) {
-                  updated.variants = {
-                    name: `${String(productDoc.rows[0].slug)}-variants.json`,
-                    text: JSON.stringify(variantDoc.rows),
-                    document: variantDoc,
-                  }
+                  const variants = mergeRows(files.variants?.document, variantDoc)
+                  updated.variants = { name: files.variants?.name ?? 'auto-configured-variants.json', text: JSON.stringify(variants.document.rows), document: variants.document }
                 }
                 setFiles(updated)
-                setActiveTab('products')
+                const inGraph = graphFromDocuments({ products: productDoc, variants: variantDoc }, library)
+                setGraph((current) => mergeGraphs(current, inGraph.graph).graph)
+                setActiveTab('builder')
+                const n = productDoc.rows.length
+                toast.success(
+                  `${n} product${n === 1 ? '' : 's'} added to the graph and to the rows (Files step), with the same SKU and images. Edit them in the graph, then stage it to move the changes back into the rows.`,
+                )
               }}
             />
           )}

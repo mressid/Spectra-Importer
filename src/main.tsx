@@ -5,9 +5,12 @@ import '@fontsource/inter/600.css'
 import './styles/tokens.css'
 import './index.css'
 import { App } from './ui/App'
+import { ToastProvider } from './ui/Toast'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <ToastProvider>
+      <App />
+    </ToastProvider>
   </StrictMode>,
 )

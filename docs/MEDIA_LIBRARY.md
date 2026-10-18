@@ -58,15 +58,16 @@ Each binding can specify its own position/order in a gallery:
   ```
 
 - **Thumbnail rule:** Any asset identified as `THUMBNAIL` is automatically assigned order `1`.
-- **Sequential fallback:** Assets in a gallery without explicit numbers are assigned sequential orders (`1, 2, 3...`) in alphabetical order.
+- **Sequential fallback:** Assets in a gallery without explicit numbers take the lowest free position (`1, 2, 3...`) in path order, around positions that a folder, a file name or `[name@3]` already gave; the result does not depend on the order the browser lists the files in.
 
 ### C. Roles
 The parser extracts roles from folder segments or file names:
-- **`THUMBNAIL`**: Main hero/cover image. Triggered by `thumbnail`, `thumb`, `cover`, `main`, `hero`.
-- **`GALLERY`**: Additional product shots. Triggered by `gallery`, `images`, `photos`, `slides`.
-- **`BANNER`**: Wide hero or category headers. Triggered by `banner`, `header`.
-- **`LOGO`**: Brand or category logos/icons. Triggered by `logo`, `icon`, `avatar`.
-- **`SWATCH`**: Color or material variant preview. Triggered by `swatch`, `color`.
+- **`THUMBNAIL`**: the one main image (position 1). Triggered by `thumbnail`, `thumb`, `cover`, `main`, `hero`, `logo`, `icon`, `avatar`.
+- **`GALLERY`**: one of several, in position order. Triggered by `gallery`, `images`, `photos`, `slides`, `banner`, `header`, `swatch`, `color`.
+
+The store's media library knows exactly these two roles, so the folder words map to them. A product has both, a variant has a gallery
+only, a category and a brand have a single image (`thumbnail/`, a brand's logo included). The review flags what does not fit, e.g. a
+`banner/` folder on a category (a gallery it cannot have).
 
 ### D. Aspect Ratios
 Aspect ratios are detected both from folder paths and calculated from media dimensions:
@@ -112,10 +113,10 @@ my-catalogue-drop/
 ├── category/
 │   └── rings/
 │       ├── 1x1/thumbnail.jpg                # category: rings (THUMBNAIL)
-│       └── 16x9/banner/hero.jpg             # category: rings (BANNER)
+│       └── 16x9/banner/hero.jpg             # category: rings (a gallery image: the store refuses it, the review says so)
 ├── brand/
 │   └── aurum/
-│       └── logo.png                         # brand: aurum (LOGO)
+│       └── logo.png                         # brand: aurum (THUMBNAIL: a brand's logo)
 └── solitaire-gold/
     └── variants/
         ├── size-52/01_macro.jpg             # variant: size-52 (GALLERY, order 1)
@@ -167,9 +168,61 @@ the previews, its kind, how many images, and a badge: `row loaded` (a loaded dat
 images) or `no row` (a data file is missing or the name is mistyped). Filter by kind or search by name. It is read from
 `GET /api/v1/admin/media/bindings/waiting` when you connect, and with *Refresh*.
 
-**Uploading is in the right-hand panel** (open by default; *Hide Upload* / *Upload Images* in the header toggles it, and the choice
-is remembered; under 1280 px wide it moves below the list): the drop zone, upload progress, the detected bindings with
-*Sync Bindings to Store*, and the uploaded library. Names that are not in the store yet land in the pending list after a sync.
+**Uploading is in the right-hand panel** (open by default; *Hide upload panel* / *Show upload panel* in the toolbar toggles it, and the
+choice is remembered; under 1280 px wide it moves below the list): the drop zone, upload progress, the detected bindings and the
+uploaded library. **A folder or files can be dropped anywhere on the step** (the panel highlights the whole step), not only on the small
+drop zone, and the browser never opens the dropped file instead.
+
+**A drop is reviewed first.** Dropping (or picking) a folder opens **Review before uploading** above the pending list; nothing is sent
+until you press *Upload*:
+
+* each place the drop touches, with small previews of its photos (thumbnail, then gallery in position order), its kind and how many
+  images, and whether it **already exists in the store** (the image is set at once) or **will be reserved** until it is created;
+  a `row loaded` badge when a loaded data file has that name;
+* a summary line (`12 files to upload, 15 bindings: 9 products, 2 variants…`, `8 already in the store, 4 reserved`);
+* **what the store would refuse, with the reason**, before anything is uploaded: a variant thumbnail, a category or brand gallery,
+  a thumbnail that is not an image, a file over 5 MB (images) or 50 MB (videos), a format the store does not take (SVG, BMP, MOV, OGG...).
+  Those files are left out; a file with one refused binding is left out as a whole (the store applies all or nothing);
+* warnings, e.g. two photos claiming one slot (only one stays);
+* what is not a photo or video at all (README, data files), which is left out.
+
+*Upload* then sends the files that are fine and binds each one **exactly as shown** (positions included), and the pending list refreshes
+by itself. The checkbox *Review what a drop will do before uploading* in the panel turns the review off (the drop then uploads at once;
+the choice is remembered). *Sync Bindings to Store* in the panel repeats the binding (after a place was created, or a refused binding was fixed).
+The command line has the same check: `spectra media drop <folder> --dry-run`.
+
+**Product folders and the Graph Builder.** After an upload the panel lists the **product folders** it found (the folder layout
+`<product>/thumbnail.png`, `images/`, `variants/<v>/`, or the library layout `product/<slug>/thumbnail|gallery/`; a container folder
+that only holds products is never listed as one, and the library's own `product/`, `brand/`, `[a, b]/` folders are not products). For each:
+
+* **Auto-configure** adds the product, with a SKU (`<SLUG>-01`, or `<SLUG>-<VARIANT>` for each variant), a placeholder price and
+  its photos (`media:<path>`), to the **rows** (the Files step) *and* to the **Graph Builder**, with the same SKU and images in both.
+  Adding the same product again updates it; it never duplicates. **Auto-configure all** does every product.
+* **Graph only** puts it in the graph without rows and without a placeholder price (the graph's checks say what is missing).
+
+**Assemble in graph (pending images).** Each row of the pending images list has an **Assemble in graph** button (and
+**Assemble all in graph** for what the filter shows). It puts the place the images are waiting for in the Graph Builder: a product
+named by its slug (with a suggested SKU, ready for its price and the rest), or a variant, category or brand node. A product's images are
+drawn as media nodes marked **Reserved**: they are already bound by name in the store and are attached when the product is created, so
+the bundle does **not** write them into the product row again (that would attach them twice), and a product whose thumbnail is
+reserved is not asked for one. A variant, category or brand image has no node in the graph; the store attaches it when the record is created.
+A node can be switched between reserved and explicit in the inspector (*Already bound by name…*).
+
+**Moving the metadata between rows and graph.** The graph is shared by the whole app (it is no longer lost when you leave the tab).
+**Load rows** in the Graph Builder moves the rows that are loaded as files (products, variants, brands, categories, tags, collections,
+including the data of a CSV, JSON or YAML file) into the graph: nodes with the same slug or SKU are updated, new ones are added below,
+photos become media nodes, references become edges. Edit there, then **Compile & Bundle → Stage into Importer** moves the graph back
+into the rows. The graph has no place for some row fields (`specifications`, `contentBlocks`…); Load rows says which, and they stay in
+the rows. A sample graph that was never touched is replaced, not merged into.
+
+Note: a dropped folder is also bound by name (the images wait for a product with that slug). Auto-configure then gives the product
+its photos explicitly as well, so a gallery image can end up attached twice when the product is created; use one of the two for a folder.
+
+**Problems are shown as toasts** (bottom right; errors stay 9 s, the rest 5 s, identical ones are merged as `×3`; dismiss with the
+cross): nothing in the drop, no image or video among the dropped files (the message lists what it found, e.g. `.csv, .json, .yaml, .md`, says that data files belong in the Files step, and recognises folders the browser could not open), not connected to the store, a file or folder the browser could
+not read, each upload the store refused (grouped by its message: "3 files were not uploaded: Image too large (a.png, b.png and 1 more)"),
+each binding it refused, and a one-line result (`4 files uploaded`, `3 bindings applied now, 2 waiting…`). Large folders are read
+completely (the browser returns a folder in batches of 100; every batch is read).
 
 * The images are attached by the store when the row is created; no `media:` reference is needed in the data file.
 * **A product row may leave `thumbnailUrl` empty when a thumbnail is waiting for its slug** (the store requires a thumbnail, and takes

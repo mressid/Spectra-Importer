@@ -180,44 +180,42 @@ label {
   background: var(--ds-color-surface-muted);
 }
 
+/* A badge is a label, not an alert: one neutral look, the meaning is a small coloured dot, so a column of badges stays calm. */
 .badge {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 1px 6px;
+  gap: 6px;
+  padding: 0 6px;
   border-radius: var(--ds-radius-chip);
   font-size: var(--ds-font-size-caption);
-  font-weight: 500;
-  line-height: 1.4;
-  background: var(--ds-color-surface-muted);
+  font-weight: 400;
+  line-height: 1.6;
+  background: transparent;
   color: var(--ds-color-text-secondary);
   border: 1px solid var(--ds-color-border);
-  letter-spacing: 0.01em;
   white-space: nowrap;
 }
-
-.badge.success {
-  background: var(--ds-color-surface-muted);
-  color: var(--ds-color-accent);
-  border-color: var(--ds-color-border);
+.badge.success::before,
+.badge.warning::before,
+.badge.error::before,
+.badge.info::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  border-radius: 50%;
 }
-
-.badge.warning {
-  background: var(--ds-color-surface-muted);
-  color: var(--ds-color-warning);
-  border-color: var(--ds-color-border);
+.badge.success::before {
+  background: var(--ds-color-accent);
 }
-
-.badge.error {
-  background: var(--ds-color-surface-muted);
-  color: var(--ds-color-error);
-  border-color: var(--ds-color-border);
+.badge.warning::before {
+  background: var(--ds-color-warning);
 }
-
-.badge.info {
-  background: var(--ds-color-surface-muted);
-  color: var(--ds-color-info);
-  border-color: var(--ds-color-border);
+.badge.error::before {
+  background: var(--ds-color-error);
+}
+.badge.info::before {
+  background: var(--ds-color-info);
 }
 
 .step-nav {
@@ -841,9 +839,10 @@ pre {
 .pending-strip {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  flex: 1;
+  min-width: 0;
   gap: calc(var(--ds-space-unit) / 2);
-  width: 340px;
-  flex-shrink: 0;
 }
 
 .pending-thumb {
@@ -863,7 +862,7 @@ pre {
 .pending-text {
   display: flex;
   flex-direction: column;
-  flex: 1;
+  flex: 0 0 220px;
   min-width: 0;
 }
 
@@ -946,4 +945,214 @@ pre {
   .step-header {
     flex-direction: column;
   }
+}
+
+/* Toasts (Toast.tsx): quiet like the badges, the kind is the dot */
+.toast-region {
+  position: fixed;
+  right: calc(var(--ds-space-unit) * 2);
+  bottom: calc(var(--ds-space-unit) * 2);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-unit);
+  width: min(420px, calc(100vw - var(--ds-space-unit) * 4));
+}
+
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: calc(var(--ds-space-unit) * 1.5);
+  padding: calc(var(--ds-space-unit) * 1.5) calc(var(--ds-space-unit) * 2);
+  background: var(--ds-color-surface);
+  color: var(--ds-color-text-primary);
+  border: 1px solid var(--ds-color-border);
+  border-radius: var(--ds-radius-card);
+  font-size: var(--ds-font-size-small);
+}
+
+.toast-dot {
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: var(--ds-color-info);
+}
+
+.toast.error .toast-dot {
+  background: var(--ds-color-error);
+}
+
+.toast.success .toast-dot {
+  background: var(--ds-color-accent);
+}
+
+.toast-message {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.toast-count {
+  color: var(--ds-color-text-secondary);
+}
+
+.toast-close {
+  flex-shrink: 0;
+  border-color: transparent;
+  background: transparent;
+}
+
+/* a folder is being dragged over the Images step */
+.images-layout.drop-active {
+  outline: 2px dashed var(--ds-color-accent);
+  outline-offset: 6px;
+  border-radius: var(--ds-radius-card);
+}
+
+/* Review before uploading (DropPreview.tsx) */
+.preview {
+  margin-bottom: calc(var(--ds-space-unit) * 3);
+  padding: calc(var(--ds-space-unit) * 2);
+  border: 1px solid var(--ds-color-border);
+  border-radius: var(--ds-radius-card);
+  background: var(--ds-color-surface-muted);
+}
+
+.preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: calc(var(--ds-space-unit) * 2);
+  margin-bottom: var(--ds-space-unit);
+}
+
+.preview-actions {
+  display: flex;
+  gap: var(--ds-space-unit);
+}
+
+.preview-issues {
+  list-style: none;
+  margin: var(--ds-space-unit) 0;
+  padding: 0;
+  font-size: var(--ds-font-size-small);
+}
+
+.issue {
+  display: flex;
+  align-items: flex-start;
+  gap: calc(var(--ds-space-unit) * 1.5);
+  padding: calc(var(--ds-space-unit) / 2) 0;
+  overflow-wrap: anywhere;
+}
+
+.issue .toast-dot {
+  background: var(--ds-color-info);
+}
+
+.issue.error .toast-dot {
+  background: var(--ds-color-error);
+}
+
+.issue.warning .toast-dot {
+  background: var(--ds-color-warning);
+}
+
+.preview-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.preview-row {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--ds-space-unit) * 2);
+  padding: var(--ds-space-unit) 0;
+  border-top: 1px solid var(--ds-color-border);
+}
+
+.preview-strip {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  flex: 1;
+  min-width: 0;
+  gap: calc(var(--ds-space-unit) / 2);
+}
+
+.preview-thumb {
+  margin: 0;
+  width: 56px;
+  flex-shrink: 0;
+  text-align: center;
+}
+
+.preview-thumb img,
+.preview-thumb-empty {
+  display: block;
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: var(--ds-radius-chip);
+  background: var(--ds-color-surface);
+}
+
+.preview-thumb.refused img {
+  opacity: 0.4;
+}
+
+.preview-thumb figcaption,
+.preview-more {
+  font-size: var(--ds-font-size-caption);
+  color: var(--ds-color-text-secondary);
+}
+
+.preview-text {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 220px;
+  min-width: 0;
+}
+
+.preview-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preview-meta {
+  font-size: var(--ds-font-size-caption);
+  color: var(--ds-color-text-secondary);
+}
+
+.preview-badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: calc(var(--ds-space-unit) / 2);
+}
+
+@media (max-width: 720px) {
+  .preview-text {
+    flex-basis: 140px;
+  }
+}
+
+.review-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-unit);
+  margin: 0 0 calc(var(--ds-space-unit) * 2);
+  font-size: var(--ds-font-size-small);
+  color: var(--ds-color-text-secondary);
+  cursor: pointer;
+}
+
+.pending-row button {
+  flex-shrink: 0;
+  white-space: nowrap;
 }

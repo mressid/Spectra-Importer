@@ -32,6 +32,7 @@ touching the rest.
 | – | **Media folder parser**: directory structure → target bindings & aspect ratios | `src/upload/mediaFolderParser.ts` | done, tested |
 | – | **Image library**: upload images, keep name → url | `src/upload/imageLibrary.ts` | done (logic, tested, screen done) |
 | – | API client (login, JSON request, file upload, media bindings) | `src/upload/api.ts` | done |
+| 9 | **History**: a finished run (data import or media drop) is recorded in the store; the History page lists and opens them | `src/history/`, `src/ui/HistoryView.tsx` | done, tested |
 
 ## The rules that matter
 
@@ -117,6 +118,19 @@ A visual, node-based workflow designer (`src/graph/`, `src/ui/GraphBuilder/`) fo
 - **Workflow Canvas (`GraphCanvas`)**: Interactive 2D SVG/HTML canvas with Bezier curve connectors, drag-and-drop node positioning, click-to-connect ports, zoom/pan controls, and automatic column-based layout.
 - **Stage to Importer**: Users can stage compiled documents directly into the active import files list with a single click, allowing immediate validation, planning, and store execution.
 
+### 9. Import history
+A run is recorded **once, when it ends** (`recordSafely` in `src/history/record.ts`), by `POST /api/v1/admin/import-runs`; the
+store (feature `importrun`, migration `V44__import_history.sql`) keeps one `import_run` row and one `import_run_item` per API
+call, uploaded file and image placement. Rules:
+- the totals and the result (`SUCCEEDED`, `PARTIAL`, `FAILED`, `CANCELLED`) are computed by the store from the items;
+- the tool builds the record from what it already has: `RunReport` + `Operation[]` for a data import (`dataRun`), the upload
+  outcomes + `BindReport` for a drop (`mediaRun`), `BindReport` alone for "bind again" (`bindingRun`). Operations the user cancelled
+  before they ran are sent as `CANCELLED`; files the review refused were never sent and are not recorded;
+- a failure to save is shown and never throws: a history problem must not undo an import. A store without the endpoint answers 404;
+- history is append only (no update, no delete); the History page filters by source and result and downloads one run as JSON;
+- the CLI records `media drop` with source `CLI` (`Spectra-CLI/src/media/history.ts`).
+Diagrams: [README](../README.md#how-it-works).
+
 ## Out of scope (for now)
 Updating existing records from a diff, deleting, orders/customers/coupons, attributes/inventory levels, image editing,
-a server component, multi-store.
+a server component, multi-store, recording a run while it is still running (a closed browser loses that run), undoing an import from its history.

@@ -2,7 +2,9 @@ import { useMemo, useRef, useState } from 'react'
 import type { OperationResult, RunReport } from '../core/types'
 import type { PlanInput } from '../upload/plan'
 import { buildPlan } from '../upload/plan'
+import { dataRun, recordSafely } from '../history/record'
 import { runPlan } from '../upload/run'
+import { useToast } from './toastContext'
 import {
   IconAlertCircle,
   IconCheckCircle,
@@ -34,16 +36,20 @@ function downloadReport(report: RunReport) {
 
 export function StepImport({ inputs, initialStoreIds, onBack, onProgress, onRunningChange }: StepImportProps) {
   const plan = useMemo(() => buildPlan(inputs), [inputs])
+  const toast = useToast()
 
   const [isRunning, setIsRunning] = useState(false)
   const [results, setResults] = useState<OperationResult[]>([])
   const [report, setReport] = useState<RunReport | null>(null)
+  /** Whether the finished run was kept in the store's history (null while it is being saved or nothing ran). */
+  const [saved, setSaved] = useState<boolean | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
 
   const handleStart = async () => {
     setIsRunning(true)
     onRunningChange?.(true)
     setReport(null)
+    setSaved(null)
     const controller = new AbortController()
     abortControllerRef.current = controller
 
@@ -58,6 +64,11 @@ export function StepImport({ inputs, initialStoreIds, onBack, onProgress, onRunn
         },
       })
       setReport(res)
+      // kept in the store's history; a problem there never undoes the import that just ran
+      const conflictMode = inputs[0]?.onConflict ?? 'skip'
+      const stored = await recordSafely(dataRun(plan, res, { conflictMode, cancelled: controller.signal.aborted }))
+      setSaved(stored?.ok ?? null)
+      if (stored && !stored.ok) toast.error(`The import ran, but it could not be saved in the History: ${stored.error}`)
     } finally {
       setIsRunning(false)
       onRunningChange?.(false)
@@ -134,6 +145,7 @@ export function StepImport({ inputs, initialStoreIds, onBack, onProgress, onRunn
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
             <span style={{ fontSize: 'var(--ds-font-size-small)' }}>
               {isRunning ? 'Importing in progress...' : 'Import finished'} ({doneCount} / {plan.length})
+              {saved === true && ' · saved in History'}
             </span>
             <span style={{ fontSize: 'var(--ds-font-size-small)', color: 'var(--ds-color-text-secondary)' }}>
               {percent}%

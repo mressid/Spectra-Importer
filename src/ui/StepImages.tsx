@@ -6,6 +6,7 @@ import {
   type MediaBindingStatusDto,
 } from '../upload/api'
 import { bindAssets } from '../upload/bindAssets'
+import { bindingRun, mediaRun, recordSafely } from '../history/record'
 import { buildDropPlan, type DropPlan } from '../upload/dropPlan'
 import type { StoreKind } from '../upload/bindingRules'
 import { detectProductFolders } from '../upload/detectProductFolders'
@@ -332,8 +333,15 @@ export function StepImages({ library, onLibraryChange, onNext, documents, storeI
     await uploadFiles(ready.map((f) => f.file), reviewed)
   }
 
+  /** Keeps what a drop did in the store's History; a problem there is told, never thrown. */
+  const saveToHistory = async (run: Parameters<typeof recordSafely>[0]) => {
+    const stored = await recordSafely(run)
+    if (stored && !stored.ok) toast.error(`Done, but it could not be saved in the History: ${stored.error}`)
+  }
+
   const uploadFiles = async (files: File[], reviewed: DropPlan) => {
     setBindingSyncSummary(null)
+    const startedAt = new Date().toISOString()
     try {
       // Check media library folder structure (targets, multi-name [a, b], roles, aspect ratios, orders)
       const mediaParsed = parseMediaFolder(files)
@@ -369,14 +377,16 @@ export function StepImages({ library, onLibraryChange, onNext, documents, storeI
       if (uploaded > 0) toast.success(`${uploaded} file${uploaded === 1 ? '' : 's'} uploaded.`)
 
       // dropping a folder also puts every file in its place: no second click
+      let bound: Awaited<ReturnType<typeof bindAssets>> | null = null
       if (uploaded > 0 && mediaParsed.assets.length > 0) {
         setIsSyncingBindings(true)
-        const report = await bindAssets(mediaParsed.assets, updatedLibrary)
+        bound = await bindAssets(mediaParsed.assets, updatedLibrary)
         setIsSyncingBindings(false)
-        setBindingStatuses((current) => new Map([...current, ...report.statuses]))
-        reportBinding(report)
+        setBindingStatuses((current) => new Map([...current, ...bound!.statuses]))
+        reportBinding(bound)
         await onRefreshWaiting?.()
       }
+      await saveToHistory(mediaRun(outcomes, mediaParsed.assets, bound, { startedAt, finishedAt: new Date().toISOString() }))
     } catch (error) {
       setUploadProgress(null)
       setIsSyncingBindings(false)
@@ -393,11 +403,13 @@ export function StepImages({ library, onLibraryChange, onNext, documents, storeI
     }
     setIsSyncingBindings(true)
     setBindingSyncSummary(null)
+    const startedAt = new Date().toISOString()
     try {
       const report = await bindAssets(mediaFolderResult.assets, library)
       setBindingStatuses((current) => new Map([...current, ...report.statuses]))
       reportBinding(report)
       await onRefreshWaiting?.()
+      await saveToHistory(bindingRun(mediaFolderResult.assets, report, { startedAt, finishedAt: new Date().toISOString() }))
     } catch (error) {
       toast.error(`Sync failed: ${(error as Error).message}`)
     } finally {

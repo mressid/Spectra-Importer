@@ -6,6 +6,7 @@ import {
   IconCheckCircle,
   IconClock,
   IconFileText,
+  IconHistory,
   IconLogo,
   IconMedia,
   IconOperations,
@@ -31,6 +32,7 @@ export type TabId =
   | 'variants'
   | 'media'
   | 'operations'
+  | 'history'
   | 'connect'
 
 interface SidebarProps {
@@ -281,6 +283,16 @@ export function Sidebar({
           ) : totalOperations > 0 ? (
             <span className="sidebar-badge-dot info" />
           ) : null)}
+        </button>
+
+        <button
+          type="button"
+          className={`sidebar-item ${activeTab === 'history' ? 'active' : ''}`}
+          onClick={() => onSelectTab('history')}
+          title="History of imports"
+        >
+          <IconHistory size={18} className="sidebar-icon" />
+          <span className="sidebar-item-text" style={{ flex: 1, textAlign: 'left' }}>History</span>
         </button>
 
         <button

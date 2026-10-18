@@ -34,6 +34,7 @@ import type { WaitingPlace } from '../upload/waitingMedia'
 import type { StructuredProductFolder } from '../upload/folderStructure'
 import { useToast } from './toastContext'
 import { DocumentationView } from './DocumentationView'
+import { HistoryView } from './HistoryView'
 
 export function App() {
   const [activeTab, setActiveTab] = useState<TabId>('overview')
@@ -479,6 +480,8 @@ export function App() {
               )}
             </div>
           )}
+
+          {activeTab === 'history' && <HistoryView connected={connectedUser !== null} />}
 
           {activeTab === 'connect' && (
             <StepConnect

@@ -14,6 +14,8 @@ interface StepCheckProps {
   library: ImageLibrary
   storeIndex: Partial<Record<ResourceKind, Map<string, string>>>
   storeIndexLoading: boolean
+  /** Product slugs with a thumbnail waiting in the store: their thumbnailUrl may be empty. */
+  reservedThumbnails: ReadonlySet<string>
   onRefreshStoreIndex: () => Promise<void>
   conflictMode: ConflictMode
   setConflictMode: (mode: ConflictMode) => void
@@ -27,6 +29,7 @@ export function StepCheck({
   library,
   storeIndex,
   storeIndexLoading,
+  reservedThumbnails,
   onRefreshStoreIndex,
   conflictMode,
   setConflictMode,
@@ -62,6 +65,7 @@ export function StepCheck({
       pending,
       existing: storeIndexToExisting(storeIndex),
       images: libraryNames(library),
+      reservedThumbnails,
     }
 
     let rowsCount = 0
@@ -88,7 +92,7 @@ export function StepCheck({
       totalErrors: errorsCount,
       totalWarnings: warningsCount,
     }
-  }, [files, library, storeIndex])
+  }, [files, library, storeIndex, reservedThumbnails])
 
   const handleStartImport = () => {
     const inputs: PlanInput[] = []

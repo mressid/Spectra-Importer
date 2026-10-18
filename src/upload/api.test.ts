@@ -6,6 +6,7 @@ import {
   login,
   logout,
   refreshAuthToken,
+  listWaitingMedia,
   setMediaBindings,
   uploadFile,
 } from './api'
@@ -161,25 +162,14 @@ describe('api auth and token management', () => {
       capturedBody = init.body
       return {
         ok: true,
+        // the shape the store really answers: { results: [...] } (BindMediaResponseDto)
         json: async () => ({
-          data: [
-            {
-              uploadedFileId: 'file-123',
-              target: 'product',
-              name: 'ring-a',
-              role: 'THUMBNAIL',
-              order: 1,
-              status: 'APPLIED',
-            },
-            {
-              uploadedFileId: 'file-123',
-              target: 'product',
-              name: 'ring-b',
-              role: 'THUMBNAIL',
-              order: 1,
-              status: 'WAITING',
-            },
-          ],
+          data: {
+            results: [
+              { target: 'product', name: 'ring-a', role: 'THUMBNAIL', order: 1, status: 'APPLIED' },
+              { target: 'product', name: 'ring-b', role: 'THUMBNAIL', order: 1, status: 'WAITING' },
+            ],
+          },
         }),
       }
     })
@@ -202,5 +192,25 @@ describe('api auth and token management', () => {
         { target: 'product', name: 'ring-b', role: 'THUMBNAIL', order: 1 },
       ],
     })
+  })
+
+  it('setMediaBindings also accepts a bare array', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ data: [{ target: 'product', name: 'a', role: 'GALLERY', order: 1, status: 'WAITING' }] }),
+    })
+    const res = await setMediaBindings({ uploadedFileId: 'f', bindings: [{ target: 'product', name: 'a', role: 'GALLERY' }] })
+    expect(res.map((r) => r.status)).toEqual(['WAITING'])
+  })
+
+  it('listWaitingMedia reads the reservations', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ data: [{ target: 'variant', name: 'SKU-1', role: 'GALLERY', order: 1, url: 'http://x/a.png' }] }),
+    })
+    globalThis.fetch = fetchMock
+    const res = await listWaitingMedia()
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/api/v1/admin/media/bindings/waiting')
+    expect(res[0].name).toBe('SKU-1')
   })
 })

@@ -13,8 +13,8 @@ const availability = z.preprocess((value) => (value === '' ? undefined : value),
 export const productRow = z.object({
   slug,
   name: requiredText(),
-  /** Picture shown in lists: http(s) address or media:<file name> from the image library. */
-  thumbnailUrl: mediaUrl,
+  /** Picture shown in lists: http(s) address or media:<file name> from the image library. Required by the store; left empty only when an image is waiting for this slug (checked in validate.ts). */
+  thumbnailUrl: optionalMediaUrl,
   brand: text(), // slug of a brand
   categories: list(), // slugs
   tags: list(), // slugs

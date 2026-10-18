@@ -1,12 +1,24 @@
 import { useMemo, useRef, useState } from 'react'
-import type { ImportDocument } from '../core/types'
+import type { ImportDocument, ResourceKind } from '../core/types'
 import {
   isLoggedIn,
   setMediaBindings,
+  type WaitingMedia,
   type MediaBindingStatusDto,
 } from '../upload/api'
+import { EXAMPLE_COMBOS, exampleComboZip } from '../upload/exampleCombos'
+import {
+  buildFolderTemplate,
+  EXAMPLE_ROWS,
+  folderTemplateZip,
+  FOLDER_TEMPLATE_ROOT,
+  type FolderTemplateSource,
+  type SlotTarget,
+} from '../upload/folderTemplate'
+import { groupWaiting, knownNames, TEMPLATE_OF, waitingDataCsv, withoutRow } from '../upload/waitingMedia'
 import {
   generateRowsFromStructuredProduct,
+  isMediaFile,
   parseStructuredFolder,
   type StructuredProductFolder,
 } from '../upload/folderStructure'
@@ -22,6 +34,8 @@ import {
   IconCamera,
   IconCheckCircle,
   IconClock,
+  IconArrowRight,
+  IconClose,
   IconCopy,
   IconFileText,
   IconFolderOpen,
@@ -32,13 +46,32 @@ import {
   IconVariant,
 } from './Icons'
 import { getMediaLibraryDoc } from './docsData'
+import { DownloadMenu, type DownloadMenuGroup } from './DownloadMenu'
+import { PendingList } from './PendingList'
+import { saveFile } from './saveFile'
 import { MarkdownViewer } from './MarkdownViewer'
 
 interface StepImagesProps {
   library: ImageLibrary
   onLibraryChange: (newLibrary: ImageLibrary) => void
   onNext: () => void
+  /** Rows loaded in the Files step: they name the folders of the downloadable folder template. */
+  documents?: Partial<Record<ResourceKind, ImportDocument | undefined>>
+  /** Images uploaded and bound by name that wait for their product, variant... to be created; null = not loaded yet. */
+  waiting?: WaitingMedia[] | null
+  onRefreshWaiting?: () => Promise<void>
   onAutoConfigure?: (productDoc: ImportDocument, variantDoc?: ImportDocument) => void
+}
+
+const UPLOAD_KEY = 'store-importer.upload-panel-open'
+
+/** The upload panel is open unless the user closed it. */
+function readUploadOpen(): boolean {
+  try {
+    return localStorage.getItem(UPLOAD_KEY) !== '0'
+  } catch {
+    return true
+  }
 }
 
 function formatSize(bytes: number): string {
@@ -95,7 +128,7 @@ async function getFilesFromDataTransfer(dataTransfer: DataTransfer): Promise<Fil
   return Array.from(dataTransfer.files || [])
 }
 
-export function StepImages({ library, onLibraryChange, onNext, onAutoConfigure }: StepImagesProps) {
+export function StepImages({ library, onLibraryChange, onNext, documents, waiting, onRefreshWaiting, onAutoConfigure }: StepImagesProps) {
   const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(null)
   const [failures, setFailures] = useState<{ fileName: string; error: string }[]>([])
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
@@ -108,18 +141,157 @@ export function StepImages({ library, onLibraryChange, onNext, onAutoConfigure }
   const [isSyncingBindings, setIsSyncingBindings] = useState(false)
   const [bindingSyncSummary, setBindingSyncSummary] = useState<string | null>(null)
   const [showGuide, setShowGuide] = useState(false)
+  const [templateNote, setTemplateNote] = useState<string | null>(null)
+  const [waitingLoading, setWaitingLoading] = useState(false)
+  const [uploadOpen, setUploadOpen] = useState<boolean>(readUploadOpen)
+  const changeUploadOpen = (open: boolean) => {
+    setUploadOpen(open)
+    try {
+      localStorage.setItem(UPLOAD_KEY, open ? '1' : '0')
+    } catch {
+      // storage blocked: the choice only lasts for this visit
+    }
+  }
   const mediaDoc = useMemo(() => getMediaLibraryDoc(), [])
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const folderInputRef = useRef<HTMLInputElement>(null)
 
-  const processFiles = async (files: File[]) => {
+  /** Empty folders for the rows loaded in the Files step: all of them, or one kind. */
+  const downloadFolderTemplate = (kinds: (keyof FolderTemplateSource)[], fileSuffix: string) => {
+    // nothing loaded for what was asked for: hand out the example layout so there is always a template to start from
+    const useExample = kinds.every((kind) => !documents?.[kind]?.rows.length)
+    const rows = (kind: keyof FolderTemplateSource) =>
+      kinds.includes(kind) ? (useExample ? EXAMPLE_ROWS[kind] : documents?.[kind]?.rows) : undefined
+    const template = buildFolderTemplate({
+      products: rows('products'),
+      variants: rows('variants'),
+      categories: rows('categories'),
+      brands: rows('brands'),
+    })
+    saveFile(`${FOLDER_TEMPLATE_ROOT}${fileSuffix}.zip`, folderTemplateZip(template), 'application/zip')
+    setTemplateNote(
+      [
+        useExample
+          ? `Downloaded an example layout${fileSuffix ? ` (${fileSuffix.slice(1)})` : ''}: rename the folders to your own slugs and SKUs, or load a data file in the Files step to get them named for you.`
+          : `Downloaded ${template.folders.length} folders${fileSuffix ? ` (${fileSuffix.slice(1)})` : ''} from your loaded files.`,
+        template.skipped.length > 0 ? `Skipped (name not usable as a folder on every OS): ${template.skipped.join(', ')}.` : '',
+      ]
+        .filter(Boolean)
+        .join(' '),
+    )
+  }
+
+  const waitingPlaces = useMemo(
+    () =>
+      groupWaiting(waiting ?? [], knownNames({
+        products: documents?.products,
+        variants: documents?.variants,
+        categories: documents?.categories,
+        brands: documents?.brands,
+      })),
+    [waiting, documents],
+  )
+
+  const handleRefreshWaiting = async () => {
+    if (!onRefreshWaiting) return
+    setWaitingLoading(true)
+    try {
+      await onRefreshWaiting()
+    } finally {
+      setWaitingLoading(false)
+    }
+  }
+
+  /** A data file (CSV) with a row for each waiting name that no loaded file has a row for yet. */
+  const downloadWaitingData = (target: SlotTarget) => {
+    const names = withoutRow(waitingPlaces, target).map((place) => place.name)
+    const blank = names.length === 0
+    saveFile(`${TEMPLATE_OF[target]}-${blank ? 'template' : 'waiting'}.csv`, waitingDataCsv(target, names), 'text/csv')
+    setTemplateNote(
+      blank
+        ? `Downloaded a blank ${target} CSV with the template columns. Add one row per ${target} and load it in the Files step.`
+        : `Downloaded ${names.length} ${target} rows with the waiting names filled in. Fill in the other columns and load the file in the Files step; the images are attached when the rows are created.`,
+    )
+  }
+
+  const withoutRowCount = (target: SlotTarget) => withoutRow(waitingPlaces, target).length
+  const waitingDataItem = (target: SlotTarget, label: string) => ({
+    id: `waiting-${target}`,
+    label: withoutRowCount(target) > 0 ? `${label} (${withoutRowCount(target)})` : label,
+    description:
+      withoutRowCount(target) > 0
+        ? 'CSV with the pending names filled in'
+        : waiting
+          ? `blank CSV with the template columns (no ${target} is pending without a row)`
+          : 'blank CSV with the template columns (load the pending images to prefill names)',
+    onSelect: () => downloadWaitingData(target),
+  })
+
+  const downloadExample = async (comboId: string) => {
+    const combo = EXAMPLE_COMBOS.find((c) => c.id === comboId)
+    if (!combo) return
+    saveFile(`${combo.id}.zip`, await exampleComboZip(combo), 'application/zip')
+    setTemplateNote(`Downloaded the example "${combo.title}" with ${combo.files.length - 1} sample photos and its README.`)
+  }
+
+  const loadedCount = (kind: keyof FolderTemplateSource) => documents?.[kind]?.rows.length ?? 0
+  const loadedItem = (kind: keyof FolderTemplateSource, label: string, singular: string, suffix: string) => ({
+    id: kind,
+    label: loadedCount(kind) > 0 ? `${label} (${loadedCount(kind)})` : label,
+    description:
+      loadedCount(kind) > 0
+        ? `empty folders named after each ${singular}`
+        : `example layout (load a ${label.toLowerCase()} file to use your own names)`,
+    onSelect: () => downloadFolderTemplate([kind], suffix),
+  })
+  const loadedTotal = loadedCount('products') + loadedCount('variants') + loadedCount('categories') + loadedCount('brands')
+
+  const downloadGroups: DownloadMenuGroup[] = [
+    {
+      heading: 'Empty folders (named after your loaded files)',
+      items: [
+        {
+          id: 'all',
+          label: loadedTotal > 0 ? `Everything loaded (${loadedTotal})` : 'All four kinds',
+          description: loadedTotal > 0 ? 'products, variants, categories and brands in one ZIP' : 'example layout for products, variants, categories and brands',
+          onSelect: () => downloadFolderTemplate(['products', 'variants', 'categories', 'brands'], ''),
+        },
+        loadedItem('products', 'Products', 'product', '-products'),
+        loadedItem('variants', 'Variants', 'variant', '-variants'),
+        loadedItem('categories', 'Categories', 'category', '-categories'),
+        loadedItem('brands', 'Brands', 'brand', '-brands'),
+      ],
+    },
+    {
+      heading: 'Data file templates (CSV)',
+      items: [
+        waitingDataItem('product', 'Products'),
+        waitingDataItem('variant', 'Variants'),
+        waitingDataItem('category', 'Categories'),
+        waitingDataItem('brand', 'Brands'),
+      ],
+    },
+    {
+      heading: 'Examples with sample photos',
+      items: EXAMPLE_COMBOS.map((combo) => ({
+        id: combo.id,
+        label: combo.title,
+        description: combo.description,
+        onSelect: () => downloadExample(combo.id),
+      })),
+    },
+  ]
+
+  const processFiles = async (dropped: File[]) => {
+    // README.txt and other non-media files of a dropped folder are not images: do not send them to the store
+    const files = dropped.filter((file) => isMediaFile(file.name))
     if (files.length === 0) return
 
     setFailures([])
     setBindingSyncSummary(null)
 
-    // Check media library folder structure (targets, multi-name *:[...], roles, aspect ratios, orders)
+    // Check media library folder structure (targets, multi-name [a, b], roles, aspect ratios, orders)
     const mediaParsed = parseMediaFolder(files)
     if (mediaParsed.assets.length > 0) {
       setMediaFolderResult(mediaParsed)
@@ -245,24 +417,45 @@ export function StepImages({ library, onLibraryChange, onNext, onAutoConfigure }
   }, [mediaFolderResult])
 
   return (
-    <div className="card">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-        <div>
-          <h2>2. Media Library & Folder Uploader</h2>
+    <div className="images-layout">
+    <div className="card images-main">
+      <div className="step-header">
+        <div className="step-header-text">
+          <h2>2. Media Library</h2>
           <p style={{ color: 'var(--ds-color-text-secondary)', margin: 0 }}>
-            Upload folders or files. Encodes targets, multi-names (<code>*:[slug-a, slug-b]</code>), roles, path orders, and aspect ratios into media bindings.
+            Images waiting for their products, variants, categories and brands. Upload folders or files from the panel on the right: names are bound to a slug or SKU even before the data is imported.
           </p>
         </div>
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          <button type="button" onClick={() => setShowGuide(!showGuide)} style={{ gap: '6px' }}>
+        <button className="primary" type="button" onClick={onNext}>
+          Next: Choose Files
+          <IconArrowRight size={16} />
+        </button>
+      </div>
+
+      <div className="toolbar">
+        <div className="toolbar-group">
+          <DownloadMenu
+            label="Folder template"
+            align="left"
+            title="Empty folders named after your products, variants, categories and brands, or one of the documented examples. Fill them with photos, then drop the folder back in the upload panel"
+            groups={downloadGroups}
+          />
+          <button type="button" aria-pressed={showGuide} onClick={() => setShowGuide(!showGuide)}>
             <IconFileText size={16} />
-            {showGuide ? 'Hide Folder Guide' : 'Folder Structure Guide'}
-          </button>
-          <button className="primary" type="button" onClick={onNext}>
-            Next: Choose Files
+            Folder guide
           </button>
         </div>
+        <button type="button" aria-pressed={uploadOpen} onClick={() => changeUploadOpen(!uploadOpen)}>
+          <IconUpload size={16} />
+          {uploadOpen ? 'Hide upload panel' : 'Show upload panel'}
+        </button>
       </div>
+
+      {templateNote && (
+        <p style={{ color: 'var(--ds-color-text-secondary)', fontSize: 'var(--ds-font-size-small)', margin: '0 0 16px' }}>
+          {templateNote} Unzip it, fill the folders with photos, then drop the extracted folder in the upload panel.
+        </p>
+      )}
 
       {/* Collapsible Folder Structure & Media Library Guide */}
       {showGuide && (
@@ -287,16 +480,32 @@ export function StepImages({ library, onLibraryChange, onNext, onAutoConfigure }
           </div>
 
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
-            <span className="badge">Multi-Name: *:[slug-a, slug-b]</span>
-            <span className="badge">Order: *:[slug-a:1, slug-b:3]</span>
+            <span className="badge">Multi-Name: [slug-a, slug-b]</span>
+            <span className="badge">Order: [slug-a@1, slug-b@3]</span>
             <span className="badge">Roles: thumbnail | gallery | banner | logo</span>
-            <span className="badge">Aspect Ratios: 1:1 | 4:5 | 16:9</span>
+            <span className="badge">Aspect Ratios: 1x1 | 4x5 | 16x9</span>
           </div>
 
           <MarkdownViewer content={mediaDoc} />
         </div>
       )}
 
+      <PendingList
+        places={waitingPlaces}
+        loaded={waiting !== null && waiting !== undefined}
+        loading={waitingLoading}
+        connected={isLoggedIn()}
+        onRefresh={handleRefreshWaiting}
+      />
+    </div>
+    {uploadOpen && (
+      <aside className="sheet" aria-label="Upload images">
+        <div className="sheet-header">
+          <h3 style={{ margin: 0 }}>Upload images</h3>
+          <button className="small" type="button" onClick={() => changeUploadOpen(false)} aria-label="Close upload panel" title="Close">
+            <IconClose size={14} />
+          </button>
+        </div>
       <div
         className={`dropzone ${isDragOver ? 'dragover' : ''}`}
         onDragOver={(e) => {
@@ -316,7 +525,7 @@ export function StepImages({ library, onLibraryChange, onNext, onAutoConfigure }
           Select or drop a structured media folder (or files)
         </p>
         <p style={{ color: 'var(--ds-color-text-secondary)', fontSize: 'var(--ds-font-size-small)', marginBottom: '12px' }}>
-          Supports: <code>*:[ring-a, ring-b]/gallery/01.jpg</code>, <code>category/rings/16:9/banner.jpg</code>, <code>product/slug/thumbnail.png</code>
+          Supports: <code>[ring-a, ring-b]/gallery/01.jpg</code>, <code>category/rings/16x9/banner.jpg</code>, <code>product/slug/thumbnail.png</code>
         </p>
         <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
           <button
@@ -432,7 +641,7 @@ export function StepImages({ library, onLibraryChange, onNext, onAutoConfigure }
             ))}
             {mediaFolderResult.multiBoundAssetsCount > 0 && (
               <span className="badge success">
-                {mediaFolderResult.multiBoundAssetsCount} multi-bound assets (*:[...])
+                {mediaFolderResult.multiBoundAssetsCount} multi-bound assets ([a, b])
               </span>
             )}
           </div>
@@ -718,6 +927,8 @@ export function StepImages({ library, onLibraryChange, onNext, onAutoConfigure }
           </div>
         )}
       </div>
+      </aside>
+    )}
     </div>
   )
 }

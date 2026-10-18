@@ -328,7 +328,29 @@ export interface MediaBindingStatusDto {
 /**
  * PUT /api/v1/admin/media/bindings
  * Binds an uploaded file to any number of named target places (existing or pending).
+ * The store answers `{ results: [...] }`; a bare array is accepted too.
  */
 export async function setMediaBindings(payload: SetMediaBindingsRequest): Promise<MediaBindingStatusDto[]> {
-  return request<MediaBindingStatusDto[]>('PUT', '/api/v1/admin/media/bindings', payload)
+  const data = await request<MediaBindingStatusDto[] | { results?: MediaBindingStatusDto[] }>('PUT', '/api/v1/admin/media/bindings', payload)
+  return Array.isArray(data) ? data : (data?.results ?? [])
+}
+
+/** A file reserved for a place that does not exist yet (WaitingMediaDto of the store). */
+export interface WaitingMedia {
+  /** product, variant, category or brand */
+  target: string
+  /** The slug or SKU it waits for. */
+  name: string
+  role: 'THUMBNAIL' | 'GALLERY'
+  order: number
+  altText: string | null
+  uploadedFileId: string
+  url: string
+  mediaType: 'IMAGE' | 'VIDEO'
+  reservedAt: string
+}
+
+/** GET /api/v1/admin/media/bindings/waiting: every reservation still waiting for its product, variant, category or brand. */
+export async function listWaitingMedia(): Promise<WaitingMedia[]> {
+  return (await request<WaitingMedia[]>('GET', '/api/v1/admin/media/bindings/waiting')) ?? []
 }

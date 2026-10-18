@@ -59,11 +59,12 @@ Limits enforced by the store: images up to 5 MB (resized), MP4/WebM videos up to
 ### 2.1 Media library folder bindings (names, not ids)
 When directories are dropped into the uploader, `parseMediaFolder` extracts:
 - Target entities (`product`, `variant`, `category`, `brand`, etc.) and logical names (`slug`, `sku`).
-- Multi-name / wildcard bindings: `*:[slug-a, slug-b]` binds one asset to multiple places simultaneously.
-- Individual path-bound ordering: `*:[slug-a:1, slug-b:3]`, numeric folder segments `gallery/1/`, filename prefixes `01_front.jpg`.
+- Multi-name bindings: `[slug-a, slug-b]` binds one asset to multiple places simultaneously.
+- Individual path-bound ordering: `[slug-a@1, slug-b@3]`, numeric folder segments `gallery/1/`, filename prefixes `01_front.jpg`.
 - Roles: `THUMBNAIL` (always order 1), `GALLERY`, `BANNER`, `LOGO`, `SWATCH`.
 - Aspect ratios: parsed from path (`1:1`, `4:5`, `16:9`, `ratio-1x1`) and calculated from dimensions (`calculateAspectRatio`).
 - Store sync: `PUT /api/v1/admin/media/bindings` sends `{ uploadedFileId, bindings: [{ target, name, role, order, altText }] }`. Existing places are applied at once (`APPLIED`), while uncreated places are reserved in `pending_media` (`WAITING`). Detailed reference: [docs/MEDIA_LIBRARY.md](MEDIA_LIBRARY.md).
+- Folder template (download): `src/upload/folderTemplate.ts` + `zip.ts` turn the loaded rows into an empty `media-drop.zip` laid out as the parser reads it (`product/<slug>/thumbnail|gallery`, `variant/<sku>/gallery`, `category/<slug>/thumbnail`, `brand/<slug>/thumbnail`), so uploading is: download, fill, drop back.
 
 ### 3. The schema is the single source of truth
 One zod schema per template (`src/templates/schemas/`). It validates JSON/YAML values *and* coerces CSV strings, using

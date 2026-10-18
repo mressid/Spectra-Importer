@@ -6,7 +6,7 @@ describe('docsData', () => {
     const doc = getMediaLibraryDoc()
     expect(doc).toBeTruthy()
     expect(doc).toContain('Media Library & Folder Structure Importer')
-    expect(doc).toContain('Wildcard & Multi-Name Syntax')
+    expect(doc).toContain('Multi-Name Syntax')
   })
 
   it('loads ARCHITECTURE.md markdown document', () => {

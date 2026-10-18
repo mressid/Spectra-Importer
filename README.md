@@ -9,7 +9,7 @@ file (json | yaml | csv) → adapter → JSON rows → validation → upload to 
 * Every row has an identifier (`slug`, `sku` or `key`); rows refer to each other with it.
 * Images and videos are uploaded once in an image uploader; the tool keeps a library (file name → store URL) and data files
   refer to them as `media:<fileName>`.
-* **Media Library & Folder Importer**: Supports directory structure upload with wildcard multi-entity bindings (`*:[slug-a, slug-b]`), individual path-bound orders, aspect ratio classification (`1:1`, `4:5`, `16:9`), and store binding synchronization (`PUT /api/v1/admin/media/bindings`); see [docs/MEDIA_LIBRARY.md](docs/MEDIA_LIBRARY.md).
+* **Media Library & Folder Importer**: Supports directory structure upload with wildcard multi-entity bindings (`[slug-a, slug-b]`), individual path-bound orders, aspect ratio classification (`1x1`, `4x5`, `16x9` folders), and store binding synchronization (`PUT /api/v1/admin/media/bindings`), and a downloadable empty folder template built from your loaded files (fill it with photos, drop it back); see [docs/MEDIA_LIBRARY.md](docs/MEDIA_LIBRARY.md).
 * Ready-made templates with documentation for each resource live in [`templates/`](templates): media, tags, brands,
   categories, collections, products, variants (no media file: images go through the uploader).
 

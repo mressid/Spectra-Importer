@@ -10,6 +10,8 @@ export interface ValidationContext {
   existing: Partial<Record<ResourceKind, Set<string>>>
   /** File names of the images in the image library: what `media:<fileName>` may point at. */
   images: Set<string>
+  /** Product slugs that have a thumbnail waiting in the store (see upload/waitingMedia.ts): their `thumbnailUrl` may be empty. */
+  reservedThumbnails?: ReadonlySet<string>
 }
 
 export interface ValidationResult {
@@ -69,6 +71,9 @@ export function validateDocument(document: ImportDocument, context: ValidationCo
       parsed.error.issues.forEach((issue) => fail(issue.message, issue.path.join('.') || undefined))
     } else {
       const values = parsed.data
+      if (document.template === 'products' && !values.thumbnailUrl && !context.reservedThumbnails?.has(id)) {
+        fail('is required, unless an image is already waiting in the store for this slug (Images step: load waiting images)', 'thumbnailUrl')
+      }
       for (const rule of template.references) {
         const value = values[rule.field]
         for (const item of Array.isArray(value) ? value : value === undefined ? [] : [value]) {

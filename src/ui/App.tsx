@@ -18,6 +18,8 @@ import { StepCheck } from './StepCheck'
 import { StepConnect } from './StepConnect'
 import type { LoadedFile } from './StepFiles'
 import { StepImages } from './StepImages'
+import { listWaitingMedia, type WaitingMedia } from '../upload/api'
+import { reservedThumbnailSlugs } from '../upload/waitingMedia'
 import { StepImport } from './StepImport'
 import { TokenStatusWidget } from './TokenStatusWidget'
 import { GraphBuilder } from './GraphBuilder/GraphBuilder'
@@ -33,6 +35,9 @@ export function App() {
   const [files, setFiles] = useState<Partial<Record<ResourceKind, LoadedFile>>>({})
   const [storeIndex, setStoreIndex] = useState<Partial<Record<ResourceKind, Map<string, string>>>>({})
   const [storeIndexLoading, setStoreIndexLoading] = useState(false)
+  /** Images uploaded and bound by name that wait for their product, variant... to be created; null = not loaded. */
+  const [waitingMedia, setWaitingMedia] = useState<WaitingMedia[] | null>(null)
+  const reservedThumbnails = useMemo(() => reservedThumbnailSlugs(waitingMedia ?? []), [waitingMedia])
 
   const [conflictMode, setConflictMode] = useState<ConflictMode>('skip')
   const [importOnlyValid, setImportOnlyValid] = useState(true)
@@ -71,6 +76,28 @@ export function App() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [toggleSidebar])
 
+  const refreshWaitingMedia = useCallback(async () => {
+    try {
+      setWaitingMedia(await listWaitingMedia())
+    } catch {
+      setWaitingMedia(null)
+    }
+  }, [])
+
+  // a session restored from storage: read the waiting images once so a product row may leave its thumbnail empty
+  useEffect(() => {
+    if (!connectedUser) return
+    let cancelled = false
+    listWaitingMedia()
+      .then((items) => {
+        if (!cancelled) setWaitingMedia(items)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [connectedUser])
+
   const refreshStoreIndex = useCallback(async () => {
     setStoreIndexLoading(true)
     try {
@@ -102,6 +129,7 @@ export function App() {
       pending,
       existing: storeIndexToExisting(storeIndex),
       images: libraryNames(library),
+      reservedThumbnails,
     }
 
     for (const [k, f] of Object.entries(files)) {
@@ -112,7 +140,7 @@ export function App() {
     }
 
     return results
-  }, [files, library, storeIndex])
+  }, [files, library, storeIndex, reservedThumbnails])
 
   const initialStoreIds = useMemo(() => {
     const map: Record<string, string> = {}
@@ -208,7 +236,10 @@ export function App() {
               connectedUser={connectedUser}
               onAuthChange={(email) => {
                 setConnectedUser(email)
-                if (email) refreshStoreIndex()
+                if (email) {
+                  refreshStoreIndex()
+                  refreshWaitingMedia()
+                }
               }}
             />
 
@@ -300,6 +331,14 @@ export function App() {
               library={library}
               onLibraryChange={setLibrary}
               onNext={() => setActiveTab('products')}
+              waiting={waitingMedia}
+              onRefreshWaiting={refreshWaitingMedia}
+              documents={{
+                products: files.products?.document,
+                variants: files.variants?.document,
+                categories: files.categories?.document,
+                brands: files.brands?.document,
+              }}
               onAutoConfigure={(productDoc, variantDoc) => {
                 const updated = { ...files }
                 updated.products = {
@@ -352,6 +391,7 @@ export function App() {
                 library={library}
                 storeIndex={storeIndex}
                 storeIndexLoading={storeIndexLoading}
+                reservedThumbnails={reservedThumbnails}
                 onRefreshStoreIndex={refreshStoreIndex}
                 conflictMode={conflictMode}
                 setConflictMode={setConflictMode}

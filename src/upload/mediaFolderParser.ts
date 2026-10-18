@@ -3,9 +3,10 @@
  *
  * Implements folder structure parsing for the store media library importer:
  * - Detects targets (product, variant, category, brand, etc.)
- * - Supports wildcard multi-name syntax: `*:[ring-a, ring-b]`, `product:[ring-a, ring-b]`, `[ring-a, ring-b]`
+ * - Supports multi-name folders: `[ring-a, ring-b]`, `variant[SKU-1, SKU-2]`, `[product=ring-a, category=rings]`
+ *   (only characters valid in a folder name on every OS; the older `*:[...]` spelling still works)
  * - Supports individual path-bound order: explicit order in folder (`1/`, `order-2/`),
- *   filename prefixes (`01_front.jpg`), or per-target binding order (`*:[ring-a:1, ring-b:2]`)
+ *   filename prefixes (`01_front.jpg`), or per-place order (`[ring-a@1, ring-b@2]`)
  * - Extracts roles (THUMBNAIL, GALLERY, BANNER, LOGO, SWATCH)
  * - Identifies aspect ratios from folder paths (e.g., `1:1`, `4:5`, `16:9`, `3:4`)
  *   and calculates aspect ratio and orientation from image dimensions (width, height)
@@ -184,20 +185,20 @@ export interface ParsedTargetName {
 }
 
 /**
- * Parses target and logical names from path segments.
- * Supports:
- *  - `*:[ring-a, ring-b]`
- *  - `*:[ring-a:1, ring-b:2]`
- *  - `product:[ring-a, ring-b]`
- *  - `*:[product:ring-a, category:rings]`
- *  - `[ring-a, ring-b]`
- *  - `ring-gold`
+ * Parses target and logical names from path segments. The portable spelling uses only characters that are valid in
+ * a folder name on Windows, macOS and Linux (`:` and `*` are not valid on Windows):
+ *  - `[ring-a, ring-b]`                       several products
+ *  - `variant[SKU-1, SKU-2]`                  several places of one kind
+ *  - `[product=ring-a, category=rings]`       each entry names its kind
+ *  - `[ring-a@1, ring-b@3]`                   a position per place (`@` = "at")
+ *  - `ring-gold`                              one place
+ * The older spelling still works: `*:[...]`, `product:[...]`, `product:ring-a`, `ring-a:3`.
  */
 export function parseTargetAndNames(segment: string, defaultTarget = 'product'): ParsedTargetName[] {
   const trimmed = segment.trim()
   if (!trimmed) return []
 
-  // Case 1: *:[...] or target:[...] or [...]
+  // Case 1: [...], kind[...], *:[...] or kind:[...]
   const bracketMatch = trimmed.match(/^(\*|[a-zA-Z0-9_-]+)?:?\[(.*)\]$/)
   if (bracketMatch) {
     const rawTargetPrefix = bracketMatch[1]
@@ -212,10 +213,25 @@ export function parseTargetAndNames(segment: string, defaultTarget = 'product'):
     const results: ParsedTargetName[] = []
 
     for (const entry of entries) {
-      // Check if entry has target:name:order or target:name or name:order
-      const parts = entry.split(':').map((p) => p.trim())
+      // Portable position suffix: name@3, kind=name@3
+      let rest = entry
+      let order: number | undefined
+      const at = rest.match(/^(.*)@(\d+)$/)
+      if (at) {
+        rest = at[1].trim()
+        order = parseInt(at[2], 10)
+      }
+
+      // Portable kind: kind=name
+      const eq = rest.indexOf('=')
+      if (eq > 0) {
+        results.push({ target: rest.slice(0, eq).trim().toLowerCase(), name: rest.slice(eq + 1).trim(), order })
+        continue
+      }
+
+      // Older colon spellings: target:name:order, target:name, name:order
+      const parts = rest.split(':').map((p) => p.trim())
       if (parts.length === 3) {
-        // target:name:order
         const orderNum = parseInt(parts[2], 10)
         results.push({
           target: parts[0].toLowerCase(),
@@ -223,27 +239,14 @@ export function parseTargetAndNames(segment: string, defaultTarget = 'product'):
           order: Number.isNaN(orderNum) ? undefined : orderNum,
         })
       } else if (parts.length === 2) {
-        // Could be target:name OR name:order
         const secondNum = parseInt(parts[1], 10)
         if (!Number.isNaN(secondNum) && !KNOWN_TARGETS.has(parts[0].toLowerCase())) {
-          // name:order
-          results.push({
-            target: explicitTarget || defaultTarget,
-            name: parts[0],
-            order: secondNum,
-          })
+          results.push({ target: explicitTarget || defaultTarget, name: parts[0], order: secondNum })
         } else {
-          // target:name
-          results.push({
-            target: parts[0].toLowerCase(),
-            name: parts[1],
-          })
+          results.push({ target: parts[0].toLowerCase(), name: parts[1], order })
         }
       } else if (parts.length === 1 && parts[0]) {
-        results.push({
-          target: explicitTarget || defaultTarget,
-          name: parts[0],
-        })
+        results.push({ target: explicitTarget || defaultTarget, name: parts[0], order })
       }
     }
 
@@ -410,7 +413,7 @@ export function parseMediaFolder(files: File[]): ParseMediaFolderResult {
         continue
       }
 
-      // Check if bracket multi-name segment: *:[...], product:[...], [...]
+      // Check if bracket multi-name segment: [...], product[...] (older: *:[...], product:[...])
       if (part.includes('[') && part.includes(']')) {
         const parsed = parseTargetAndNames(part, currentTarget)
         targetCandidates.push(...parsed)

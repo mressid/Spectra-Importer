@@ -120,6 +120,43 @@ describe('parseTargetAndNames', () => {
   })
 })
 
+describe('parseTargetAndNames, portable spelling (no ":" or "*" in the folder name)', () => {
+  it('reads several products from [a, b]', () => {
+    expect(parseTargetAndNames('[ring-a, ring-b]')).toEqual([
+      { target: 'product', name: 'ring-a' },
+      { target: 'product', name: 'ring-b' },
+    ])
+  })
+
+  it('reads the kind written before the bracket', () => {
+    expect(parseTargetAndNames('variant[SKU-1,SKU-2]')).toEqual([
+      { target: 'variant', name: 'SKU-1' },
+      { target: 'variant', name: 'SKU-2' },
+    ])
+  })
+
+  it('reads a kind per entry with "="', () => {
+    expect(parseTargetAndNames('[product=ring-a, category=rings]')).toEqual([
+      { target: 'product', name: 'ring-a' },
+      { target: 'category', name: 'rings' },
+    ])
+  })
+
+  it('reads a position per place with "@"', () => {
+    expect(parseTargetAndNames('[ring-a@1, ring-b@3]')).toEqual([
+      { target: 'product', name: 'ring-a', order: 1 },
+      { target: 'product', name: 'ring-b', order: 3 },
+    ])
+    expect(parseTargetAndNames('[category=rings@2]')).toEqual([{ target: 'category', name: 'rings', order: 2 }])
+  })
+
+  it('gives the same bindings as the older spelling', () => {
+    const portable = parseTargetAndNames('[product=ring-a@1, category=rings@2]')
+    const older = parseTargetAndNames('*:[product:ring-a:1, category:rings:2]')
+    expect(portable).toEqual(older)
+  })
+})
+
 describe('detectRole & extractOrder & extractAltText', () => {
   it('detects role from filename or folder segment', () => {
     expect(detectRole('thumbnail')).toBe('THUMBNAIL')

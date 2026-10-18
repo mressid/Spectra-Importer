@@ -120,6 +120,8 @@ export function StepImages({ library, onLibraryChange, onNext, documents, storeI
   const [isSyncingBindings, setIsSyncingBindings] = useState(false)
   const [bindingSyncSummary, setBindingSyncSummary] = useState<string | null>(null)
   const [showGuide, setShowGuide] = useState(false)
+  /** The library has two views; the files already uploaded come first. */
+  const [view, setView] = useState<'uploaded' | 'pending'>('uploaded')
   const [templateNote, setTemplateNote] = useState<string | null>(null)
   const [waitingLoading, setWaitingLoading] = useState(false)
   const [uploadOpen, setUploadOpen] = useState<boolean>(readUploadOpen)
@@ -152,9 +154,9 @@ export function StepImages({ library, onLibraryChange, onNext, documents, storeI
     setTemplateNote(
       [
         useExample
-          ? `Downloaded an example layout${fileSuffix ? ` (${fileSuffix.slice(1)})` : ''}: rename the folders to your own slugs and SKUs, or load a data file in the Files step to get them named for you.`
+          ? `Downloaded an example layout${fileSuffix ? ` (${fileSuffix.slice(1)})` : ''}. Rename the folders to your slugs and SKUs.`
           : `Downloaded ${template.folders.length} folders${fileSuffix ? ` (${fileSuffix.slice(1)})` : ''} from your loaded files.`,
-        template.skipped.length > 0 ? `Skipped (name not usable as a folder on every OS): ${template.skipped.join(', ')}.` : '',
+        template.skipped.length > 0 ? `${template.skipped.length} skipped (name not usable as a folder).` : '',
       ]
         .filter(Boolean)
         .join(' '),
@@ -193,8 +195,8 @@ export function StepImages({ library, onLibraryChange, onNext, documents, storeI
     saveFile(`${TEMPLATE_OF[target]}-${blank ? 'template' : 'waiting'}.csv`, waitingDataCsv(target, names), 'text/csv')
     setTemplateNote(
       blank
-        ? `Downloaded a blank ${target} CSV with the template columns. Add one row per ${target} and load it in the Files step.`
-        : `Downloaded ${names.length} ${target} rows with the waiting names filled in. Fill in the other columns and load the file in the Files step; the images are attached when the rows are created.`,
+        ? `Downloaded a blank ${target} CSV.`
+        : `Downloaded ${names.length} ${target} rows with the waiting names.`,
     )
   }
 
@@ -215,7 +217,7 @@ export function StepImages({ library, onLibraryChange, onNext, documents, storeI
     const combo = EXAMPLE_COMBOS.find((c) => c.id === comboId)
     if (!combo) return
     saveFile(`${combo.id}.zip`, await exampleComboZip(combo), 'application/zip')
-    setTemplateNote(`Downloaded the example "${combo.title}" with ${combo.files.length - 1} sample photos and its README.`)
+    setTemplateNote(`Downloaded the example "${combo.title}" with ${combo.files.length - 1} photos.`)
   }
 
   const loadedCount = (kind: keyof FolderTemplateSource) => documents?.[kind]?.rows.length ?? 0
@@ -482,7 +484,7 @@ export function StepImages({ library, onLibraryChange, onNext, documents, storeI
         <div className="step-header-text">
           <h2>2. Media Library</h2>
           <p style={{ color: 'var(--ds-color-text-secondary)', margin: 0 }}>
-            Images waiting for their products, variants, categories and brands. Upload folders or files from the panel on the right: names are bound to a slug or SKU even before the data is imported.
+            Photos named by place wait here until the place exists.
           </p>
         </div>
         <button className="primary" type="button" onClick={onNext}>
@@ -511,8 +513,8 @@ export function StepImages({ library, onLibraryChange, onNext, documents, storeI
       </div>
 
       {templateNote && (
-        <p style={{ color: 'var(--ds-color-text-secondary)', fontSize: 'var(--ds-font-size-small)', margin: '0 0 16px' }}>
-          {templateNote} Unzip it, fill the folders with photos, then drop the extracted folder in the upload panel.
+        <p className="muted-line" style={{ margin: '0 0 16px' }}>
+          {templateNote}
         </p>
       )}
 
@@ -534,6 +536,7 @@ export function StepImages({ library, onLibraryChange, onNext, documents, storeI
               Media Library Folder Structure & Binding Specification
             </h3>
             <button className="small" type="button" onClick={() => setShowGuide(false)}>
+              <IconClose size={13} />
               Close Guide
             </button>
           </div>
@@ -555,14 +558,82 @@ export function StepImages({ library, onLibraryChange, onNext, documents, storeI
         </div>
       )}
 
-      <PendingList
-        places={waitingPlaces}
-        loaded={waiting !== null && waiting !== undefined}
-        loading={waitingLoading}
-        connected={isLoggedIn()}
-        onRefresh={handleRefreshWaiting}
-        onAssemble={onAssemblePending}
-      />
+      <div className="library-tabs" role="tablist" aria-label="Library view">
+        <button type="button" role="tab" aria-selected={view === 'uploaded'} onClick={() => setView('uploaded')}>
+          <IconMedia size={14} />
+          Uploaded ({imagesList.length})
+        </button>
+        <button type="button" role="tab" aria-selected={view === 'pending'} onClick={() => setView('pending')}>
+          <IconClock size={14} />
+          Pending{waiting ? ` (${waitingPlaces.length})` : ''}
+        </button>
+      </div>
+
+      {view === 'uploaded' ? (
+        imagesList.length === 0 ? (
+          <p className="muted-line">No images uploaded yet.</p>
+        ) : (
+          <table>
+            <thead>
+              <tr>
+                <th style={{ width: '64px' }} />
+                <th>File</th>
+                <th>Placed in</th>
+                <th style={{ width: '1%' }} />
+              </tr>
+            </thead>
+            <tbody>
+              {imagesList.map((img) => {
+                const ratio = img.width && img.height ? calculateAspectRatio(img.width, img.height) : undefined
+                const matchedAsset = assetMap.get(img.fileName)
+                const statuses = img.id ? bindingStatuses.get(String(img.id)) : undefined
+                const details = [formatSize(img.sizeBytes), img.width && img.height ? `${img.width}×${img.height}` : null, ratio?.formatted ?? null, img.duplicate ? 'already in the store' : null].filter(Boolean)
+                return (
+                  <tr key={img.fileName}>
+                    <td>
+                      {img.mediaType === 'VIDEO' ? (
+                        <video src={img.url} width={48} height={48} style={{ objectFit: 'cover', borderRadius: 'var(--ds-radius-chip)' }} />
+                      ) : (
+                        <img src={img.url} alt={img.fileName} loading="lazy" width={48} height={48} style={{ objectFit: 'cover', borderRadius: 'var(--ds-radius-chip)' }} />
+                      )}
+                    </td>
+                    <td>
+                      <div style={{ fontWeight: 600, overflowWrap: 'anywhere' }}>{img.fileName}</div>
+                      <div className="muted-line">{details.join(' · ')}</div>
+                    </td>
+                    <td>
+                      {matchedAsset?.bindings.map((b) => `${b.target}: ${b.name} (${b.role.toLowerCase()})`).join(', ')}
+                      {statuses?.map((st, i) => (
+                        <span key={i} className={`badge ${st.status === 'APPLIED' ? 'success' : 'warning'}`} style={{ marginLeft: '8px' }}>
+                          {st.status === 'APPLIED' ? 'set' : 'reserved'}
+                        </span>
+                      ))}
+                    </td>
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                      <button className="small" type="button" onClick={() => handleCopy(img.fileName)}>
+                        <IconCopy size={13} />
+                        {copiedKey === img.fileName ? 'Copied' : 'Copy name'}
+                      </button>{' '}
+                      <button className="small danger" type="button" title="Remove from the library" aria-label="Remove image" onClick={() => handleRemove(img.fileName)}>
+                        <IconTrash size={13} />
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        )
+      ) : (
+        <PendingList
+          places={waitingPlaces}
+          loaded={waiting !== null && waiting !== undefined}
+          loading={waitingLoading}
+          connected={isLoggedIn()}
+          onRefresh={handleRefreshWaiting}
+          onAssemble={onAssemblePending}
+        />
+      )}
     </div>
     {uploadOpen && (
       <aside className="sheet" aria-label="Upload images">
@@ -592,8 +663,8 @@ export function StepImages({ library, onLibraryChange, onNext, documents, storeI
         <p style={{ fontWeight: 600, marginBottom: '8px' }}>
           Select a structured media folder (or files), or drop it anywhere on this page
         </p>
-        <p style={{ color: 'var(--ds-color-text-secondary)', fontSize: 'var(--ds-font-size-small)', marginBottom: '12px' }}>
-          Supports: <code>[ring-a, ring-b]/gallery/01.jpg</code>, <code>category/rings/16x9/banner.jpg</code>, <code>product/slug/thumbnail.png</code>
+        <p className="muted-line" style={{ marginBottom: '12px' }}>
+          For example <code>product/ring-a/gallery/01.jpg</code>
         </p>
         <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
           <button
@@ -678,9 +749,7 @@ export function StepImages({ library, onLibraryChange, onNext, documents, storeI
               <h3 style={{ margin: 0, color: 'var(--ds-color-accent)' }}>
                 Media Library Bindings Detected ({mediaFolderResult.assets.length} assets)
               </h3>
-              <span style={{ fontSize: 'var(--ds-font-size-small)', color: 'var(--ds-color-text-secondary)' }}>
-                Entities, roles, path-bound orders and aspect ratios parsed from directory structure.
-              </span>
+              <span className="muted-line">Read from the folder names.</span>
             </div>
 
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -815,9 +884,7 @@ export function StepImages({ library, onLibraryChange, onNext, documents, storeI
               <h3 style={{ margin: 0 }}>
                 Product Folders Detected ({detectedProducts.length})
               </h3>
-              <span style={{ fontSize: 'var(--ds-font-size-small)', color: 'var(--ds-color-text-secondary)' }}>
-                Auto-configure makes each product with a SKU, its photos and its variants, both as rows and in the Graph Builder, ready to edit there (the price is a placeholder to change).
-              </span>
+              <span className="muted-line">Makes each product with its SKU, photos and variants, in the rows and the graph.</span>
             </div>
             {onAutoConfigure && detectedProducts.length > 1 && (
               <button className="primary small" type="button" onClick={() => handleAutoConfigure(detectedProducts)}>
@@ -880,6 +947,7 @@ export function StepImages({ library, onLibraryChange, onNext, documents, storeI
                       onClick={() => onConfigureInGraph([p])}
                       title="Only in the Graph Builder, without rows and without a placeholder price"
                     >
+                      <IconWorkflow size={14} />
                       Graph only
                     </button>
                   )}
@@ -890,118 +958,6 @@ export function StepImages({ library, onLibraryChange, onNext, documents, storeI
         </div>
       )}
 
-      <div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-          <h3>Uploaded Library ({imagesList.length})</h3>
-        </div>
-
-        {imagesList.length === 0 ? (
-          <p style={{ color: 'var(--ds-color-text-secondary)', fontSize: 'var(--ds-font-size-small)' }}>
-            No images uploaded yet. Select a structured folder or images above.
-          </p>
-        ) : (
-          <div className="image-grid">
-            {imagesList.map((img) => {
-              const ratio = img.width && img.height ? calculateAspectRatio(img.width, img.height) : undefined
-              const matchedAsset = assetMap.get(img.fileName)
-              const statuses = img.id ? bindingStatuses.get(String(img.id)) : undefined
-
-              return (
-                <div key={img.fileName} className="image-card">
-                  {img.mediaType === 'VIDEO' ? (
-                    <video src={img.url} style={{ width: '100%', height: '120px', objectFit: 'cover', borderRadius: 'var(--ds-radius-inner)' }} />
-                  ) : (
-                    <img src={img.url} alt={img.fileName} loading="lazy" />
-                  )}
-
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <div
-                      style={{
-                        fontWeight: 600,
-                        fontSize: 'var(--ds-font-size-caption)',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}
-                      title={img.fileName}
-                    >
-                      {img.fileName}
-                    </div>
-
-                    <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', alignItems: 'center' }}>
-                      <span style={{ fontSize: 'var(--ds-font-size-caption)', color: 'var(--ds-color-text-secondary)' }}>
-                        {formatSize(img.sizeBytes)}
-                      </span>
-                      {img.width && img.height && (
-                        <span style={{ fontSize: 'var(--ds-font-size-caption)', color: 'var(--ds-color-text-secondary)' }}>
-                          • {img.width}×{img.height}
-                        </span>
-                      )}
-                      {ratio && (
-                        <span className="badge" title={`Aspect ratio: ${ratio.formatted} (${ratio.orientation})`}>
-                          {ratio.formatted}
-                        </span>
-                      )}
-                      {img.duplicate && (
-                        <span className="badge">already in store</span>
-                      )}
-                    </div>
-
-                    {/* Bindings & store status if present */}
-                    {matchedAsset && matchedAsset.bindings.length > 0 && (
-                      <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '2px' }}>
-                        {matchedAsset.bindings.map((b, bi) => (
-                          <span
-                            key={bi}
-                            className="badge"
-                            style={{ fontSize: 'var(--ds-font-size-caption)' }}
-                          >
-                            {b.target}:{b.name} ({b.role.toLowerCase()})
-                          </span>
-                        ))}
-                      </div>
-                    )}
-
-                    {statuses && statuses.length > 0 && (
-                      <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '2px' }}>
-                        {statuses.map((st, si) => (
-                          <span
-                            key={si}
-                            className={`badge ${st.status === 'APPLIED' ? 'success' : 'warning'}`}
-                          >
-                            {st.status}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  <div style={{ display: 'flex', gap: '6px', marginTop: 'auto' }}>
-                    <button
-                      className="small"
-                      type="button"
-                      style={{ flex: 1, gap: '4px' }}
-                      onClick={() => handleCopy(img.fileName)}
-                    >
-                      <IconCopy size={13} />
-                      {copiedKey === img.fileName ? 'Copied!' : 'Copy media:name'}
-                    </button>
-                    <button
-                      className="small danger"
-                      type="button"
-                      title="Remove from local library"
-                      aria-label="Remove image"
-                      onClick={() => handleRemove(img.fileName)}
-                    >
-                      <IconTrash size={13} />
-                    </button>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </div>
       </aside>
     )}
     </div>

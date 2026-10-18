@@ -14,6 +14,7 @@ import {
   NODE_WIDTH,
 } from '../../graph/selectionUtils'
 import { NodeCard } from './NodeCard'
+import { IconMinus, IconPlus, IconRefresh } from '../Icons'
 
 interface GraphCanvasProps {
   nodes: GraphNode[]
@@ -568,7 +569,7 @@ export function GraphCanvas({
               top: `${Math.min(selectionBox.startY, selectionBox.currentY)}px`,
               width: `${Math.abs(selectionBox.currentX - selectionBox.startX)}px`,
               height: `${Math.abs(selectionBox.currentY - selectionBox.startY)}px`,
-              border: '1px dashed var(--ds-color-accent)',
+              border: '1px dashed var(--ds-color-primary)',
               background: 'var(--ds-color-surface-muted)',
               opacity: 0.5,
               pointerEvents: 'none',
@@ -601,7 +602,7 @@ export function GraphCanvas({
           onClick={() => setZoom((z) => Math.min(2.5, +(z * 1.15).toFixed(2)))}
           title="Zoom In (+ / Keypad +)"
         >
-          +
+          <IconPlus size={14} />
         </button>
         <button
           type="button"
@@ -609,7 +610,7 @@ export function GraphCanvas({
           onClick={() => setZoom((z) => Math.max(0.25, +(z * 0.85).toFixed(2)))}
           title="Zoom Out (- / Keypad -)"
         >
-          -
+          <IconMinus size={14} />
         </button>
         <button
           type="button"
@@ -620,6 +621,7 @@ export function GraphCanvas({
           }}
           title="Reset Zoom & Pan (0 / Keypad 0)"
         >
+          <IconRefresh size={13} />
           {Math.round(zoom * 100)}%
         </button>
         <div style={{ height: '16px', width: '1px', background: 'var(--ds-color-border)', margin: '0 2px' }} />

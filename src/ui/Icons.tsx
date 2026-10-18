@@ -14,6 +14,8 @@ const defaultProps = {
   strokeWidth: 1.75,
   strokeLinecap: 'round' as const,
   strokeLinejoin: 'round' as const,
+  // lets the display setting hide every icon (text only)
+  'data-icon': '',
 }
 
 export function IconLogo({ size = 20, ...props }: IconProps) {
@@ -421,6 +423,14 @@ export function IconHistory({ size = 18, ...props }: IconProps) {
       <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
       <polyline points="3 3 3 8 8 8" />
       <polyline points="12 7 12 12 15 14" />
+    </svg>
+  )
+}
+
+export function IconMinus({ size = 16, ...props }: IconProps) {
+  return (
+    <svg width={size} height={size} {...defaultProps} {...props}>
+      <line x1="5" y1="12" x2="19" y2="12" />
     </svg>
   )
 }

@@ -31,7 +31,7 @@ interface NodeCardProps {
 function getNodeIcon(type: GraphNodeType) {
   switch (type) {
     case 'product':
-      return <IconProduct size={16} style={{ color: 'var(--ds-color-accent)' }} />
+      return <IconProduct size={16} style={{ color: 'var(--ds-color-primary)' }} />
     case 'brand':
       return <IconBrand size={16} style={{ color: 'var(--ds-color-info)' }} />
     case 'category':
@@ -84,13 +84,13 @@ export function NodeCard({
     background: 'var(--ds-color-surface)',
     border: `1px solid ${
       isSelected
-        ? 'var(--ds-color-accent)'
+        ? 'var(--ds-color-primary)'
         : isConnectingSource
           ? 'var(--ds-color-info)'
           : 'var(--ds-color-border)'
     }`,
     boxShadow: isSelected
-      ? '0 0 0 2px var(--ds-color-accent)'
+      ? '0 0 0 2px var(--ds-color-primary)'
       : '0 2px 6px rgba(0,0,0,0.06)',
     borderRadius: 'var(--ds-radius-card)',
     userSelect: 'none',
@@ -299,7 +299,7 @@ export function NodeCard({
           height: '12px',
           borderRadius: 'var(--ds-radius-chip)',
           background: 'var(--ds-color-surface)',
-          border: '2px solid var(--ds-color-accent)',
+          border: '2px solid var(--ds-color-primary)',
           cursor: 'pointer',
         }}
         title="Input connection port"

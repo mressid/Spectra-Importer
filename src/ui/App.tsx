@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { ConflictMode, OperationResult, ResourceKind } from '../core/types'
+import type { ConflictMode, ResourceKind } from '../core/types'
 import { RESOURCE_KINDS } from '../core/types'
 import { TEMPLATES } from '../templates'
-import { isLoggedIn } from '../upload/api'
+import { getCurrentUserEmail, isLoggedIn } from '../upload/api'
 import type { ImageLibrary } from '../upload/imageLibrary'
 import { libraryNames, loadLibrary } from '../upload/imageLibrary'
 import type { PlanInput } from '../upload/plan'
@@ -21,7 +21,8 @@ import { StepImages } from './StepImages'
 import { listWaitingMedia, type WaitingMedia } from '../upload/api'
 import { reservedThumbnailSlugs } from '../upload/waitingMedia'
 import { StepImport } from './StepImport'
-import { TokenStatusWidget } from './TokenStatusWidget'
+import { useDisplayMode } from './displayMode'
+import { useTokenKeepAlive } from './useTokenKeepAlive'
 import { GraphBuilder } from './GraphBuilder/GraphBuilder'
 import { createPresetGraph } from '../graph/bundler'
 import { graphFromDocuments } from '../graph/fromDocuments'
@@ -39,7 +40,7 @@ import { HistoryView } from './HistoryView'
 export function App() {
   const [activeTab, setActiveTab] = useState<TabId>('overview')
   const [connectedUser, setConnectedUser] = useState<string | null>(
-    isLoggedIn() ? 'admin@store.local' : null,
+    isLoggedIn() ? getCurrentUserEmail() : null,
   )
 
   const [library, setLibrary] = useState<ImageLibrary>(() => loadLibrary())
@@ -56,7 +57,6 @@ export function App() {
   const [conflictMode, setConflictMode] = useState<ConflictMode>('skip')
   const [importOnlyValid, setImportOnlyValid] = useState(true)
   const [planInputs, setPlanInputs] = useState<PlanInput[]>([])
-  const [operationResults, setOperationResults] = useState<OperationResult[]>([])
   const [isRunning, setIsRunning] = useState(false)
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
@@ -66,6 +66,11 @@ export function App() {
       return false
     }
   })
+
+  const [displayMode, setDisplayMode] = useDisplayMode()
+
+  // the login is kept alive in silence; the connection button in the top bar shows when it cannot be
+  useTokenKeepAlive(connectedUser, () => setConnectedUser(null))
 
   const toggleSidebar = useCallback(() => {
     setSidebarCollapsed((prev) => {
@@ -211,18 +216,7 @@ export function App() {
   return (
     <div className="dashboard-layout">
       {/* Sidebar with Navigation Tabs & Operations Brief */}
-      <Sidebar
-        activeTab={activeTab}
-        onSelectTab={setActiveTab}
-        connectedUser={connectedUser}
-        imageCount={library.size}
-        files={files}
-        operationResults={operationResults}
-        totalOperations={planInputs.reduce((acc, p) => acc + p.rows.length, 0)}
-        isRunning={isRunning}
-        collapsed={sidebarCollapsed}
-        onToggleCollapse={toggleSidebar}
-      />
+      <Sidebar activeTab={activeTab} onSelectTab={setActiveTab} collapsed={sidebarCollapsed} onToggleCollapse={toggleSidebar} />
 
       {/* Main Dashboard Content */}
       <main className="dashboard-main">
@@ -254,22 +248,11 @@ export function App() {
             </span>
             <IconChevronRight size={14} style={{ color: 'var(--ds-color-text-secondary)' }} />
             <strong style={{ fontSize: 'var(--ds-font-size-base)', textTransform: 'capitalize' }}>
-              {activeTab}
+              {activeTab === 'connect' ? 'settings' : activeTab === 'operations' ? 'import' : activeTab}
             </strong>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <TokenStatusWidget
-              compact
-              connectedUser={connectedUser}
-              onAuthChange={(email) => {
-                setConnectedUser(email)
-                if (email) {
-                  refreshStoreIndex()
-                  refreshWaitingMedia()
-                }
-              }}
-            />
 
             {loadedFilesCount > 0 && (
               <button
@@ -321,16 +304,9 @@ export function App() {
             <DashboardOverview
               files={files}
               imageCount={library.size}
-              connectedUser={connectedUser}
-              operationResults={operationResults}
-              totalOperations={planInputs.reduce((acc, p) => acc + p.rows.length, 0)}
               isRunning={isRunning}
               onSelectTab={setActiveTab}
               onRunImport={handleRunFullImport}
-              onAuthChange={(email) => {
-                setConnectedUser(email)
-                if (email) refreshStoreIndex()
-              }}
             />
           )}
 
@@ -474,7 +450,6 @@ export function App() {
                   inputs={planInputs}
                   initialStoreIds={initialStoreIds}
                   onBack={() => setActiveTab('overview')}
-                  onProgress={setOperationResults}
                   onRunningChange={setIsRunning}
                 />
               )}
@@ -485,6 +460,9 @@ export function App() {
 
           {activeTab === 'connect' && (
             <StepConnect
+              displayMode={displayMode}
+              onDisplayModeChange={setDisplayMode}
+              onDisconnected={() => setConnectedUser(null)}
               onConnected={(email) => {
                 setConnectedUser(email)
                 refreshStoreIndex()

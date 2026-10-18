@@ -8,10 +8,13 @@ import {
 import {
   IconBrand,
   IconCategory,
+  IconCheck,
+  IconChevronDown,
   IconClose,
   IconCollection,
   IconCopy,
   IconEye,
+  IconLayout,
   IconLink,
   IconMedia,
   IconPlus,
@@ -23,6 +26,23 @@ interface CatalogueSearchModalProps {
   selectedNode: GraphNode | null
   onSelectResource: (item: CatalogueSearchItem, connectToSelected: boolean) => void
   onClose: () => void
+}
+
+const filterIcon = (id: string) => {
+  switch (id) {
+    case 'brand':
+      return <IconBrand size={13} />
+    case 'category':
+      return <IconCategory size={13} />
+    case 'tag':
+      return <IconTag size={13} />
+    case 'collection':
+      return <IconCollection size={13} />
+    case 'media':
+      return <IconMedia size={13} />
+    default:
+      return <IconLayout size={13} />
+  }
 }
 
 export function CatalogueSearchModal({
@@ -312,6 +332,7 @@ export function CatalogueSearchModal({
                       cursor: 'pointer',
                     }}
                   >
+                    {filterIcon(filter.id)}
                     {filter.label}
                     {count > 0 && (
                       <span
@@ -346,7 +367,7 @@ export function CatalogueSearchModal({
           >
             {loading ? (
               <div style={{ padding: '36px', textAlign: 'center', color: 'var(--ds-color-text-secondary)' }}>
-                Loading resources from Store API and Media Library...
+                Loading from the store...
               </div>
             ) : items.length === 0 ? (
               <div
@@ -454,7 +475,7 @@ export function CatalogueSearchModal({
                                 className="badge success"
                                 style={{ fontSize: 'var(--ds-font-size-caption)', padding: '1px 5px' }}
                               >
-                                Store API
+                                In the store
                               </span>
                             )}
                           </div>
@@ -534,7 +555,8 @@ export function CatalogueSearchModal({
                         gap: '6px',
                       }}
                     >
-                      {loadingMore ? 'Loading next 5...' : 'Load More (+5 items)'}
+                      <IconChevronDown size={14} />
+                      {loadingMore ? 'Loading next 5...' : 'Load more'}
                     </button>
                   </div>
                 )}
@@ -559,6 +581,7 @@ export function CatalogueSearchModal({
               Showing <strong>{items.length}</strong> loaded items (batches of 5 max per kind)
             </span>
             <button type="button" className="small" onClick={onClose}>
+              <IconCheck size={13} />
               Done
             </button>
           </div>

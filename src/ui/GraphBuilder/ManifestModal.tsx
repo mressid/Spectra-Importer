@@ -181,7 +181,7 @@ export function ManifestModal({
                 onClick={handleCopy}
                 style={{ gap: '4px' }}
               >
-                {copied ? <IconCheck size={13} style={{ color: 'var(--ds-color-accent)' }} /> : <IconCopy size={13} />}
+                {copied ? <IconCheck size={13} style={{ color: 'var(--ds-color-primary)' }} /> : <IconCopy size={13} />}
                 {copied ? 'Copied' : 'Copy JSON'}
               </button>
             </div>
@@ -227,6 +227,7 @@ export function ManifestModal({
 
           <div style={{ display: 'flex', gap: '10px' }}>
             <button type="button" onClick={onClose}>
+              <IconClose size={14} />
               Close
             </button>
             <button

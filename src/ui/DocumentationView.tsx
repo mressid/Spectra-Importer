@@ -180,6 +180,7 @@ export function DocumentationView({ initialArticleId = 'media-library' }: Docume
                             transition: 'all var(--ds-motion-fast)',
                           }}
                         >
+                          <IconFileText size={14} />
                           {article.title}
                         </button>
                       )

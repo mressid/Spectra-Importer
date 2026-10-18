@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { getNodeDisplayTitle, type GraphEdge, type GraphNode } from '../../graph/types'
 import {
   IconClose,
+  IconDownload,
   IconLink,
   IconSearch,
   IconTrash,
@@ -17,6 +18,9 @@ interface NodeInspectorProps {
   onAddEdge: (sourceId: string, targetId: string) => void
   onDeleteEdge: (edgeId: string) => void
   onOpenSearch?: () => void
+  /** "Apply" next to the slug or the SKU of a product: fill the node from the store's product with that name. */
+  onApplyFromStore?: (node: GraphNode, by: 'slug' | 'sku') => void
+  applying?: boolean
   onClose: () => void
 }
 
@@ -29,6 +33,8 @@ export function NodeInspector({
   onAddEdge,
   onDeleteEdge,
   onOpenSearch,
+  onApplyFromStore,
+  applying = false,
   onClose,
 }: NodeInspectorProps) {
   const [connectTargetId, setConnectTargetId] = useState('')
@@ -212,6 +218,15 @@ export function NodeInspector({
   const nodeEdges = edges.filter((e) => e.source === node.id || e.target === node.id)
   const otherNodes = nodes.filter((n) => n.id !== node.id)
 
+  /** Only a product has one: it reads the product with this slug or SKU from the store and fills the node. */
+  const applyButton = (by: 'slug' | 'sku', value: string) =>
+    node.type === 'product' && onApplyFromStore ? (
+      <button type="button" className="small" disabled={applying || value.trim() === ''} onClick={() => onApplyFromStore(node, by)} title={`Fill this product from the store product with this ${by === 'slug' ? 'slug' : 'SKU'}`}>
+        <IconDownload size={13} />
+        {applying ? 'Looking…' : 'Apply'}
+      </button>
+    ) : null
+
   const handleFieldChange = (field: string, val: unknown) => {
     onUpdateNode(node.id, {
       ...node.data,
@@ -253,9 +268,6 @@ export function NodeInspector({
           <div style={{ fontWeight: 600, fontSize: 'var(--ds-font-size-base)', textTransform: 'capitalize' }}>
             {node.type} Node
           </div>
-          <div style={{ fontSize: 'var(--ds-font-size-caption)', color: 'var(--ds-color-text-secondary)', fontFamily: 'monospace' }}>
-            ID: {node.id}
-          </div>
         </div>
 
         <button
@@ -290,12 +302,15 @@ export function NodeInspector({
             <label style={{ display: 'block', fontSize: 'var(--ds-font-size-caption)', fontWeight: 600, marginBottom: '4px' }}>
               Slug (Identifier)
             </label>
-            <input
-              type="text"
-              value={String(node.data.slug ?? '')}
-              onChange={(e) => handleFieldChange('slug', e.target.value.toLowerCase().trim())}
-              style={{ width: '100%', fontFamily: 'monospace' }}
-            />
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <input
+                type="text"
+                value={String(node.data.slug ?? '')}
+                onChange={(e) => handleFieldChange('slug', e.target.value.toLowerCase().trim())}
+                style={{ flex: 1, minWidth: 0, fontFamily: 'monospace' }}
+              />
+              {applyButton('slug', String(node.data.slug ?? ''))}
+            </div>
           </div>
         )}
 
@@ -317,12 +332,15 @@ export function NodeInspector({
               <label style={{ display: 'block', fontSize: 'var(--ds-font-size-caption)', fontWeight: 600, marginBottom: '4px' }}>
                 SKU (Simple products only)
               </label>
-              <input
-                type="text"
-                value={String(node.data.sku ?? '')}
-                onChange={(e) => handleFieldChange('sku', e.target.value)}
-                style={{ width: '100%' }}
-              />
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <input
+                  type="text"
+                  value={String(node.data.sku ?? '')}
+                  onChange={(e) => handleFieldChange('sku', e.target.value)}
+                  style={{ flex: 1, minWidth: 0 }}
+                />
+                {applyButton('sku', String(node.data.sku ?? ''))}
+              </div>
             </div>
 
             <div>
@@ -553,10 +571,10 @@ export function NodeInspector({
                 fontWeight: 500,
                 padding: '6px 10px',
               }}
-              title="Search existing tags, collections, media, brands, categories from the Store API"
+              title="Search existing tags, collections, media, brands, categories in the store"
             >
               <IconSearch size={13} style={{ color: 'var(--ds-color-primary)' }} />
-              Search & Link from Store API...
+              Search the store
             </button>
           )}
 
@@ -581,7 +599,7 @@ export function NodeInspector({
                     }}
                   >
                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      <strong style={{ color: 'var(--ds-color-accent)' }}>{edge.type.replace('-', ' ')}</strong>:{' '}
+                      <strong style={{ color: 'var(--ds-color-primary)' }}>{edge.type.replace('-', ' ')}</strong>:{' '}
                       {otherName}
                     </span>
                     <button

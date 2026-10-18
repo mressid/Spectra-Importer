@@ -8,11 +8,11 @@ import type { ValidationResult } from '../validate/validate'
 import {
   IconAlertCircle,
   IconCheckCircle,
+  IconDownload,
   IconFileText,
   IconFolderOpen,
   IconTrash,
   IconUpload,
-  ResourceIcon,
 } from './Icons'
 import type { LoadedFile } from './StepFiles'
 import { MarkdownViewer } from './MarkdownViewer'
@@ -120,30 +120,11 @@ export function ResourceUploadTab({
       <div className="card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: '40px',
-                height: '40px',
-                borderRadius: 'var(--ds-radius-inner)',
-                background: 'var(--ds-color-surface-muted)',
-                border: '1px solid var(--ds-color-border)',
-                color: 'var(--ds-color-primary)',
-              }}
-            >
-              <ResourceIcon kind={kind} size={22} />
-            </div>
             <div>
               <h2 style={{ margin: 0 }}>{template.title} Upload</h2>
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '6px' }}>
-                <span className="badge">Endpoint: {template.endpoint}</span>
-                <span className="badge">ID: {template.idField}</span>
-                {template.dependsOn.length > 0 && (
-                  <span className="badge warning">Depends on: {template.dependsOn.join(', ')}</span>
-                )}
-              </div>
+              {template.dependsOn.length > 0 && (
+                <div className="muted-line" style={{ marginTop: '4px' }}>Create these first: {template.dependsOn.join(', ')}</div>
+              )}
             </div>
           </div>
 
@@ -153,12 +134,15 @@ export function ResourceUploadTab({
               {showDoc ? 'Hide Guide' : 'Documentation'}
             </button>
             <button className="small" type="button" onClick={() => downloadExample(kind, 'csv')}>
+              <IconDownload size={13} />
               CSV Example
             </button>
             <button className="small" type="button" onClick={() => downloadExample(kind, 'json')}>
+              <IconDownload size={13} />
               JSON
             </button>
             <button className="small" type="button" onClick={() => downloadExample(kind, 'yaml')}>
+              <IconDownload size={13} />
               YAML
             </button>
           </div>
@@ -198,21 +182,6 @@ export function ResourceUploadTab({
             }}
             style={{ padding: '36px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}
           >
-            <div
-              style={{
-                width: '48px',
-                height: '48px',
-                borderRadius: 'var(--ds-radius-card)',
-                background: 'var(--ds-color-surface-muted)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'var(--ds-color-primary)',
-                marginBottom: '12px',
-              }}
-            >
-              <IconUpload size={24} />
-            </div>
 
             <p style={{ fontWeight: 600, fontSize: 'var(--ds-font-size-base)', margin: '0 0 4px' }}>
               Drop {template.title} data file here
@@ -263,7 +232,7 @@ export function ResourceUploadTab({
           </div>
 
           {file?.error && (
-            <div className="badge error" style={{ width: '100%', marginTop: '12px', padding: '12px' }}>
+            <div className="badge error" style={{ marginTop: '12px' }}>
               <IconAlertCircle size={16} />
               {file.error}
             </div>
@@ -280,10 +249,10 @@ export function ResourceUploadTab({
               </div>
               <span className="badge">{rows.length} rows loaded</span>
               {validationResult && (
-                <span className={`badge ${validationResult.ok ? 'success' : 'error'}`}>
-                  {validationResult.clean.length} valid
-                  {validationResult.issues.length > 0 && ` (${validationResult.issues.length} issues)`}
-                </span>
+                <>
+                  {validationResult.clean.length > 0 && <span className="badge success">{validationResult.clean.length} valid</span>}
+                  {validationResult.issues.length > 0 && <span className="badge error">{validationResult.issues.length} with issues</span>}
+                </>
               )}
             </div>
 

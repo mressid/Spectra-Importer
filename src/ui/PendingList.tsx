@@ -1,7 +1,13 @@
 import { useMemo, useState } from 'react'
-import { WAITING_TARGETS, type WaitingPlace } from '../upload/waitingMedia'
+import { TEMPLATE_OF, WAITING_TARGETS, type WaitingPlace } from '../upload/waitingMedia'
 import type { SlotTarget } from '../upload/folderTemplate'
-import { IconRefresh, IconSearch, IconWorkflow } from './Icons'
+import {
+  IconLayout,
+  IconRefresh,
+  IconSearch,
+  IconWorkflow,
+  ResourceIcon,
+} from './Icons'
 
 interface PendingListProps {
   places: WaitingPlace[]
@@ -41,7 +47,7 @@ export function PendingList({ places, loaded, loading, connected, onRefresh, onA
             Pending images {loaded && <span className="badge">{places.length}</span>}
           </h3>
           <div className="pending-hint">
-            Already in the store, waiting for their product, variant, category or brand to be created.
+            Waiting for their record to be created.
             {loaded && places.length > 0 && ` ${inFiles} of ${places.length} have a row in your loaded files.`}
           </div>
         </div>
@@ -54,9 +60,7 @@ export function PendingList({ places, loaded, loading, connected, onRefresh, onA
       {!connected && <p className="pending-note">Connect to the store to see the pending images.</p>}
       {connected && !loaded && <p className="pending-note">{loading ? 'Loading...' : 'Not loaded yet. Press Refresh.'}</p>}
       {connected && loaded && places.length === 0 && (
-        <p className="pending-note">
-          Nothing is pending. Upload a folder in the panel on the right and press Sync Bindings: names that are not in the store yet will appear here.
-        </p>
+        <p className="pending-note">Nothing is pending.</p>
       )}
 
       {places.length > 0 && (
@@ -64,10 +68,12 @@ export function PendingList({ places, loaded, loading, connected, onRefresh, onA
           <div className="pending-tools">
             <div className="pending-filters" role="group" aria-label="Filter by kind">
               <button className={`small ${kind === 'all' ? 'primary' : ''}`} type="button" onClick={() => setKind('all')}>
+                <IconLayout size={13} />
                 All {places.length}
               </button>
               {WAITING_TARGETS.filter((t) => count(t) > 0).map((t) => (
                 <button key={t} className={`small ${kind === t ? 'primary' : ''}`} type="button" onClick={() => setKind(t)}>
+                  <ResourceIcon kind={TEMPLATE_OF[t]} size={13} />
                   {LABEL[t]} {count(t)}
                 </button>
               ))}

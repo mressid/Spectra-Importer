@@ -2,7 +2,12 @@ import { Fragment, useEffect, useState } from 'react'
 import { getRun, listRuns } from '../history/api'
 import { badgeClass, describeCounts, formatDuration, isProblem } from '../history/format'
 import type { RunDetail, RunPage, RunSource, RunStatus } from '../history/types'
-import { IconDownload, IconRefresh } from './Icons'
+import {
+  IconChevronLeft,
+  IconChevronRight,
+  IconDownload,
+  IconRefresh,
+} from './Icons'
 import { useToast } from './toastContext'
 
 const PAGE_SIZE = 15
@@ -87,8 +92,6 @@ function RunDetailPanel({ id }: { id: string }) {
                       {item.message}
                       {item.fieldErrors.length > 0 && <div>{item.fieldErrors.join(', ')}</div>}
                     </span>
-                  ) : item.storeId ? (
-                    <span style={small}>ID: {item.storeId}</span>
                   ) : (
                     '—'
                   )}
@@ -223,6 +226,7 @@ export function HistoryView({ connected }: { connected: boolean }) {
       {totalPages > 1 && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px' }}>
           <button type="button" className="small" disabled={page === 0 || loading} onClick={() => setPage(page - 1)}>
+            <IconChevronLeft size={14} />
             Newer
           </button>
           <span style={small}>
@@ -230,6 +234,7 @@ export function HistoryView({ connected }: { connected: boolean }) {
           </span>
           <button type="button" className="small" disabled={page + 1 >= totalPages || loading} onClick={() => setPage(page + 1)}>
             Older
+            <IconChevronRight size={14} />
           </button>
         </div>
       )}

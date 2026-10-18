@@ -8,6 +8,7 @@ import { storeIndexToExisting } from '../upload/storeIndex'
 import type { ValidationContext, ValidationResult } from '../validate/validate'
 import { validateDocument } from '../validate/validate'
 import type { LoadedFile } from './StepFiles'
+import { IconArrowRight, IconLayout, ResourceIcon } from './Icons'
 
 interface StepCheckProps {
   files: Partial<Record<ResourceKind, LoadedFile>>
@@ -142,6 +143,7 @@ export function StepCheck({
           disabled={!canProceed}
           onClick={handleStartImport}
         >
+          <IconArrowRight size={16} />
           Proceed to Import
         </button>
       </div>
@@ -160,7 +162,7 @@ export function StepCheck({
         </div>
         <div style={{ padding: '12px', border: '1px solid var(--ds-color-border)', borderRadius: 'var(--ds-radius-card)', background: 'var(--ds-color-surface)' }}>
           <span style={{ fontSize: 'var(--ds-font-size-caption)', color: 'var(--ds-color-text-secondary)' }}>Valid Rows</span>
-          <div style={{ fontSize: 'var(--ds-font-size-kpi)', fontWeight: 600, color: 'var(--ds-color-accent)' }}>{totalValid}</div>
+          <div style={{ fontSize: 'var(--ds-font-size-kpi)', fontWeight: 600 }} className="status-ok">{totalValid}</div>
         </div>
         <div style={{ padding: '12px', border: '1px solid var(--ds-color-border)', borderRadius: 'var(--ds-radius-card)', background: 'var(--ds-color-surface)' }}>
           <span style={{ fontSize: 'var(--ds-font-size-caption)', color: 'var(--ds-color-text-secondary)' }}>Errors</span>
@@ -243,6 +245,7 @@ export function StepCheck({
               type="button"
               onClick={() => setSelectedTemplateFilter('all')}
             >
+              <IconLayout size={13} />
               All
             </button>
             {Array.from(issuesByTemplate.keys()).map((k) => (
@@ -252,6 +255,7 @@ export function StepCheck({
                 type="button"
                 onClick={() => setSelectedTemplateFilter(k)}
               >
+                <ResourceIcon kind={k} size={13} />
                 {TEMPLATES[k].title} ({issuesByTemplate.get(k)?.length})
               </button>
             ))}
@@ -259,7 +263,7 @@ export function StepCheck({
         </div>
 
         {totalErrors === 0 && totalWarnings === 0 ? (
-          <div className="badge success" style={{ padding: '8px 12px' }}>
+          <div className="badge success">
             All {totalRows} rows passed validation cleanly!
           </div>
         ) : (

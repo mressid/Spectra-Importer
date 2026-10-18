@@ -8,6 +8,7 @@ import { useToast } from './toastContext'
 import {
   IconAlertCircle,
   IconCheckCircle,
+  IconChevronLeft,
   IconClock,
   IconClose,
   IconFileText,
@@ -19,7 +20,6 @@ interface StepImportProps {
   inputs: PlanInput[]
   initialStoreIds?: Partial<Record<string, string>>
   onBack: () => void
-  onProgress?: (results: OperationResult[]) => void
   onRunningChange?: (running: boolean) => void
 }
 
@@ -34,7 +34,7 @@ function downloadReport(report: RunReport) {
   URL.revokeObjectURL(url)
 }
 
-export function StepImport({ inputs, initialStoreIds, onBack, onProgress, onRunningChange }: StepImportProps) {
+export function StepImport({ inputs, initialStoreIds, onBack, onRunningChange }: StepImportProps) {
   const plan = useMemo(() => buildPlan(inputs), [inputs])
   const toast = useToast()
 
@@ -60,7 +60,6 @@ export function StepImport({ inputs, initialStoreIds, onBack, onProgress, onRunn
         conflictMode: inputs[0]?.onConflict ?? 'skip',
         onProgress: (live) => {
           setResults([...live])
-          onProgress?.(live)
         },
       })
       setReport(res)
@@ -116,6 +115,7 @@ export function StepImport({ inputs, initialStoreIds, onBack, onProgress, onRunn
 
         <div style={{ display: 'flex', gap: '8px' }}>
           <button type="button" onClick={onBack} disabled={isRunning}>
+            <IconChevronLeft size={16} />
             Back to Check
           </button>
           {!isRunning && !report && (
@@ -192,8 +192,6 @@ export function StepImport({ inputs, initialStoreIds, onBack, onProgress, onRunn
               <tr>
                 <th style={{ width: '90px' }}>Status</th>
                 <th>Operation</th>
-                <th style={{ width: '80px' }}>Method</th>
-                <th>Path</th>
                 <th>Details</th>
               </tr>
             </thead>
@@ -228,22 +226,12 @@ export function StepImport({ inputs, initialStoreIds, onBack, onProgress, onRunn
                     </td>
                     <td style={{ fontWeight: 500 }}>{op.label}</td>
                     <td>
-                      <code>{op.method}</code>
-                    </td>
-                    <td>
-                      <code style={{ fontSize: 'var(--ds-font-size-caption)' }}>{op.path}</code>
-                    </td>
-                    <td>
                       {result?.error ? (
                         <span style={{ color: 'var(--ds-color-error)', fontSize: 'var(--ds-font-size-caption)' }}>
                           {result.error.message}
                           {result.error.fieldErrors && result.error.fieldErrors.length > 0 && (
                             <div>{result.error.fieldErrors.join(', ')}</div>
                           )}
-                        </span>
-                      ) : result?.storeId ? (
-                        <span style={{ color: 'var(--ds-color-text-secondary)', fontSize: 'var(--ds-font-size-caption)' }}>
-                          ID: {result.storeId}
                         </span>
                       ) : (
                         '—'

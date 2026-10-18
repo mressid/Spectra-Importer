@@ -1,9 +1,11 @@
-import { useMemo, useState, type Dispatch, type SetStateAction } from 'react'
+import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import type { ImportDocument, ResourceKind } from '../../core/types'
 import { autoLayoutGraph, bundleGraph, createPresetGraph } from '../../graph/bundler'
 import { graphFromDocuments, type RowDocuments } from '../../graph/fromDocuments'
 import { mergeGraphs } from '../../graph/mergeGraph'
 import type { ImageLibrary } from '../../upload/imageLibrary'
+import { applySnapshot, lookupProduct } from '../../graph/fromStore'
+import { isLoggedIn } from '../../upload/api'
 import { useToast } from '../toastContext'
 import type { CatalogueSearchItem } from '../../graph/catalogueSearch'
 import type {
@@ -13,24 +15,11 @@ import type {
   GraphNodeType,
   ProductGraph,
 } from '../../graph/types'
-import {
-  IconAlertCircle,
-  IconBrand,
-  IconCategory,
-  IconCheckCircle,
-  IconCollection,
-  IconLayout,
-  IconMedia,
-  IconProduct,
-  IconSearch,
-  IconTag,
-  IconVariant,
-  IconWorkflow,
-} from '../Icons'
 import { CatalogueSearchModal } from './CatalogueSearchModal'
 import { GraphCanvas } from './GraphCanvas'
 import { ManifestModal } from './ManifestModal'
 import { NodeInspector } from './NodeInspector'
+import { IconDownload, IconLayout, IconPlay, IconSearch, IconTrash } from '../Icons'
 
 interface GraphBuilderProps {
   onStageDocuments: (documents: Partial<Record<ResourceKind, ImportDocument>>) => void
@@ -50,6 +39,13 @@ export function GraphBuilder({ onStageDocuments, graph, onGraphChange: setGraph,
   })
   const [showManifestModal, setShowManifestModal] = useState(false)
   const [showSearchModal, setShowSearchModal] = useState(false)
+  /** A product is being read from the store (Apply, next to its slug or SKU). */
+  const [applying, setApplying] = useState(false)
+  // the graph as it is when the store answers, not as it was when the button was pressed
+  const graphRef = useRef(graph)
+  useEffect(() => {
+    graphRef.current = graph
+  })
 
   const selectedNodes = useMemo(
     () => graph.nodes.filter((n) => selectedNodeIds.includes(n.id)),
@@ -253,6 +249,48 @@ export function GraphBuilder({ onStageDocuments, graph, onGraphChange: setGraph,
     }))
   }
 
+  const handleClearCanvas = () => {
+    if (graph.nodes.length === 0) return
+    if (!window.confirm('Remove everything from the canvas?')) return
+    setGraph(createPresetGraph('empty'))
+    setSelectedNodeIds([])
+    toast.info('The canvas is empty.')
+  }
+
+  /** Apply, next to a product's slug or SKU: read that product from the store and fill the node from it. */
+  const handleApplyFromStore = async (node: GraphNode, by: 'slug' | 'sku') => {
+    if (node.type !== 'product' || applying) return
+    const data = node.data as { slug?: string; sku?: string }
+    if (!isLoggedIn()) {
+      toast.error('Connect to the store first (Settings).')
+      return
+    }
+    setApplying(true)
+    try {
+      const snapshot = await lookupProduct({ slug: data.slug, sku: data.sku, first: by })
+      if (!snapshot) {
+        toast.error(by === 'slug' ? `The store has no product with the slug "${data.slug}".` : `The store has no product with the SKU "${data.sku}".`)
+        return
+      }
+      const result = applySnapshot(graphRef.current, node.id, snapshot)
+      setGraph(result.graph)
+      const { brands, categories, tags, collections, images, variants } = result.applied
+      const added = [
+        brands && `${brands} brand`,
+        categories && `${categories} categor${categories === 1 ? 'y' : 'ies'}`,
+        tags && `${tags} tag${tags === 1 ? '' : 's'}`,
+        collections && `${collections} collection${collections === 1 ? '' : 's'}`,
+        images && `${images} image${images === 1 ? '' : 's'}`,
+        variants && `${variants} variant${variants === 1 ? '' : 's'}`,
+      ].filter(Boolean)
+      toast.success(`Filled from "${String(snapshot.product.name)}"${added.length > 0 ? `, added ${added.join(', ')}` : ''}.`)
+    } catch (error) {
+      toast.error(`The store could not be read: ${(error as Error).message}`)
+    } finally {
+      setApplying(false)
+    }
+  }
+
   const handleApplyPreset = (preset: 'simple' | 'variants' | 'hierarchy' | 'empty') => {
     const newGraph = createPresetGraph(preset)
     setGraph(newGraph)
@@ -336,7 +374,7 @@ export function GraphBuilder({ onStageDocuments, graph, onGraphChange: setGraph,
         overflow: 'hidden',
       }}
     >
-      {/* Top Toolbar */}
+      {/* Top Toolbar: one row, the node types in a single list */}
       <div
         style={{
           display: 'flex',
@@ -346,186 +384,70 @@ export function GraphBuilder({ onStageDocuments, graph, onGraphChange: setGraph,
           borderBottom: '1px solid var(--ds-color-border)',
           background: 'var(--ds-color-surface)',
           flexWrap: 'wrap',
-          gap: '10px',
+          gap: '12px',
         }}
       >
-        {/* Left: Title & Presets */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: '28px',
-                height: '28px',
-                borderRadius: 'var(--ds-radius-chip)',
-                background: 'var(--ds-color-surface-muted)',
-                color: 'var(--ds-color-accent)',
-              }}
-            >
-              <IconWorkflow size={16} />
-            </div>
-            <div>
-              <div style={{ fontWeight: 600, fontSize: 'var(--ds-font-size-base)', lineHeight: 1.2 }}>
-                Product Graph Builder
-              </div>
-              <div style={{ fontSize: 'var(--ds-font-size-caption)', color: 'var(--ds-color-text-secondary)' }}>
-                Assemble catalogue nodes & compile import manifests
-              </div>
-            </div>
-          </div>
+          <strong style={{ whiteSpace: "nowrap" }}>Graph builder</strong>
+          <select
+            aria-label="Preset"
+            onChange={(e) => handleApplyPreset(e.target.value as never)}
+            defaultValue="simple"
+          >
+            <option value="simple">Ring (simple)</option>
+            <option value="variants">Bracelet (variants)</option>
+            <option value="hierarchy">Category tree</option>
+            <option value="empty">Empty canvas</option>
+          </select>
+          <select
+            aria-label="Add a node"
+            value=""
+            onChange={(e) => {
+              if (e.target.value) handleAddNode(e.target.value as never)
+            }}
+          >
+            <option value="">Add a node…</option>
+            <option value="product">Product</option>
+            <option value="brand">Brand</option>
+            <option value="category">Category</option>
+            <option value="tag">Tag</option>
+            <option value="collection">Collection</option>
+            <option value="variant">Variant</option>
+            <option value="media">Media</option>
+          </select>
+        </div>
 
-          <div style={{ height: '24px', width: '1px', background: 'var(--ds-color-border)', margin: '0 4px' }} />
-
-          {/* Preset Select */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ fontSize: 'var(--ds-font-size-caption)', color: 'var(--ds-color-text-secondary)' }}>
-              Preset:
-            </span>
-            <select
-              style={{ fontSize: 'var(--ds-font-size-small)', padding: '4px 8px' }}
-              onChange={(e) => handleApplyPreset(e.target.value as never)}
-              defaultValue="simple"
-            >
-              <option value="simple">Solitaire Ring (Simple)</option>
-              <option value="variants">Bracelet (Options / Variants)</option>
-              <option value="hierarchy">Hierarchy (Category Tree)</option>
-              <option value="empty">Empty Canvas</option>
-            </select>
-          </div>
-
-          <div style={{ height: '24px', width: '1px', background: 'var(--ds-color-border)', margin: '0 4px' }} />
-
-          {/* Search Store API Button */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <button
             type="button"
             className="small"
             onClick={() => setShowSearchModal(true)}
-            title="Search existing tags, collections, media, brands, categories from the Store API"
-            style={{
-              gap: '6px',
-              background: 'var(--ds-color-surface-muted)',
-              border: '1px solid var(--ds-color-border)',
-              color: 'var(--ds-color-text-primary)',
-              fontWeight: 500,
-            }}
+            title="Search existing tags, collections, media, brands and categories in the store"
           >
-            <IconSearch size={13} style={{ color: 'var(--ds-color-primary)' }} />
-            Search Store API
+            <IconSearch size={13} />
+            Search the store
           </button>
-        </div>
-
-        {/* Center: Add Node Buttons */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <button
-            type="button"
-            className="small"
-            onClick={() => handleAddNode('product')}
-            title="Add Product Node"
-            style={{ gap: '4px' }}
-          >
-            <IconProduct size={13} style={{ color: 'var(--ds-color-accent)' }} />
-            + Product
-          </button>
-          <button
-            type="button"
-            className="small"
-            onClick={() => handleAddNode('brand')}
-            title="Add Brand Node"
-            style={{ gap: '4px' }}
-          >
-            <IconBrand size={13} style={{ color: 'var(--ds-color-info)' }} />
-            + Brand
-          </button>
-          <button
-            type="button"
-            className="small"
-            onClick={() => handleAddNode('category')}
-            title="Add Category Node"
-            style={{ gap: '4px' }}
-          >
-            <IconCategory size={13} style={{ color: 'var(--ds-status-confirmed)' }} />
-            + Category
-          </button>
-          <button
-            type="button"
-            className="small"
-            onClick={() => handleAddNode('tag')}
-            title="Add Tag Node"
-            style={{ gap: '4px' }}
-          >
-            <IconTag size={13} style={{ color: 'var(--ds-status-pending)' }} />
-            + Tag
-          </button>
-          <button
-            type="button"
-            className="small"
-            onClick={() => handleAddNode('collection')}
-            title="Add Collection Node"
-            style={{ gap: '4px' }}
-          >
-            <IconCollection size={13} style={{ color: 'var(--ds-status-shipped)' }} />
-            + Collection
-          </button>
-          <button
-            type="button"
-            className="small"
-            onClick={() => handleAddNode('variant')}
-            title="Add Variant Node"
-            style={{ gap: '4px' }}
-          >
-            <IconVariant size={13} style={{ color: 'var(--ds-color-primary)' }} />
-            + Variant
-          </button>
-          <button
-            type="button"
-            className="small"
-            onClick={() => handleAddNode('media')}
-            title="Add Media Node"
-            style={{ gap: '4px' }}
-          >
-            <IconMedia size={13} style={{ color: 'var(--ds-color-text-secondary)' }} />
-            + Media
-          </button>
-        </div>
-
-        {/* Right Actions */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <button
             type="button"
             className="small"
             onClick={handleLoadRows}
             disabled={!rowsLoaded}
-            title={rowsLoaded ? 'Move the product, variant and other rows loaded as files into the graph' : 'No rows are loaded: load files or auto-configure products first'}
-            style={{ gap: '4px' }}
+            title={rowsLoaded ? 'Move the rows loaded as files into the graph' : 'No rows are loaded: load files or auto-configure products first'}
           >
-            <IconProduct size={13} />
+            <IconDownload size={13} />
             Load rows
           </button>
-          <button
-            type="button"
-            className="small"
-            onClick={handleAutoLayout}
-            title="Automatically arrange nodes neatly"
-            style={{ gap: '4px' }}
-          >
+          <button type="button" className="small" onClick={handleAutoLayout} title="Arrange the nodes neatly">
             <IconLayout size={13} />
-            Auto Layout
+            Auto layout
           </button>
-
-          <button
-            type="button"
-            className="small primary"
-            onClick={() => setShowManifestModal(true)}
-            style={{ gap: '6px' }}
-          >
-            {bundleResult.ok ? (
-              <IconCheckCircle size={13} style={{ color: 'var(--ds-color-accent)' }} />
-            ) : (
-              <IconAlertCircle size={13} style={{ color: 'var(--ds-color-warning)' }} />
-            )}
-            Compile & Bundle ({graph.nodes.length} nodes)
+          <button type="button" className="small" onClick={handleClearCanvas} disabled={graph.nodes.length === 0} title="Remove everything from the canvas">
+            <IconTrash size={13} />
+            Clear canvas
+          </button>
+          <button type="button" className="small primary" onClick={() => setShowManifestModal(true)}>
+            <IconPlay size={13} />
+            Compile & bundle
           </button>
         </div>
       </div>
@@ -554,6 +476,8 @@ export function GraphBuilder({ onStageDocuments, graph, onGraphChange: setGraph,
             onAddEdge={handleAddEdge}
             onDeleteEdge={handleDeleteEdge}
             onOpenSearch={() => setShowSearchModal(true)}
+            onApplyFromStore={handleApplyFromStore}
+            applying={applying}
             onClose={() => setSelectedNodeIds([])}
           />
         )}

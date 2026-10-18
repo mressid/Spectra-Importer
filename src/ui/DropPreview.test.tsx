@@ -22,7 +22,7 @@ describe('DropPreview', () => {
     )
     expect(html).toContain('Review before uploading')
     expect(html).toContain('4 files to upload, 4 bindings: 2 products, 1 brand')
-    expect(html).toContain('2 already in the store (applied now), 1 not yet (reserved until created)')
+    expect(html).toContain('2 set now, 1 reserved')
     expect(html).toContain('ring-a')
     expect(html).toContain('thumbnail + 1 gallery')
     expect(html).toContain('in the store: applied now')

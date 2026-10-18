@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { DropPlan, PlanImage, PlanPlace } from '../upload/dropPlan'
+import { IconChevronDown, IconClose, IconUpload } from './Icons'
 
 interface DropPreviewProps {
   plan: DropPlan
@@ -95,20 +96,22 @@ export function DropPreview({ plan, connected, busy, onApply, onCancel }: DropPr
             {totals.ready === 0
               ? 'Nothing in this drop can be uploaded.'
               : `${plural(totals.ready, 'file')} to upload, ${plural(totals.bindings, 'binding')}${kinds.length ? `: ${kinds.join(', ')}` : ''}.`}
-            {totals.inStore + totals.reserved > 0 && ` ${totals.inStore} already in the store (applied now), ${totals.reserved} not yet (reserved until created).`}
+            {totals.inStore + totals.reserved > 0 && ` ${totals.inStore} set now, ${totals.reserved} reserved.`}
           </div>
         </div>
         <div className="preview-actions">
           <button type="button" onClick={onCancel} disabled={busy}>
+            <IconClose size={15} />
             Cancel
           </button>
           <button className="primary" type="button" onClick={onApply} disabled={busy || totals.ready === 0 || !connected} title={connected ? undefined : 'Connect to the store first'}>
+            <IconUpload size={15} />
             Upload {plural(totals.ready, 'file')}
           </button>
         </div>
       </div>
 
-      {!connected && <p className="pending-note">Connect to the store to upload (Connect tab). You can still check the plan.</p>}
+      {!connected && <p className="pending-note">Connect to the store to upload.</p>}
 
       {(refused.length > 0 || plan.warnings.length > 0 || plan.ignored.length > 0) && (
         <ul className="preview-issues">
@@ -151,6 +154,7 @@ export function DropPreview({ plan, connected, busy, onApply, onCancel }: DropPr
       </ul>
       {plan.places.length > PLACES_SHOWN && (
         <button className="small" type="button" onClick={() => setShowAll(!showAll)}>
+          <IconChevronDown size={14} style={showAll ? { transform: 'rotate(180deg)' } : undefined} />
           {showAll ? 'Show fewer places' : `Show all ${plan.places.length} places`}
         </button>
       )}

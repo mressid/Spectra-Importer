@@ -2,6 +2,22 @@
    The tokens are in styles/tokens.css, a copy kept in step with accessories-store-system/design-tokens (npm run tokens:sync).
    Reference: accessories-store-system/design-tokens/README.md and admin/DESIGN.md */
 
+/* A calmer primary for this tool only (the shared tokens stay as they are): the token green, mixed down towards grey so it is
+   less intense. Light: deeper. Dark: softer. Mirrors how the tokens switch between the two modes. */
+:root:root:root {
+  --ds-color-primary: color-mix(in srgb, var(--ds-color-accent) 45%, var(--ds-color-text-primary));
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:root:root:not([data-theme="light"]) {
+    --ds-color-primary: color-mix(in srgb, var(--ds-color-accent) 50%, var(--ds-color-text-secondary));
+  }
+}
+
+:root:root[data-theme="dark"] {
+  --ds-color-primary: color-mix(in srgb, var(--ds-color-accent) 50%, var(--ds-color-text-secondary));
+}
+
 *, *::before, *::after {
   box-sizing: border-box;
 }
@@ -180,42 +196,24 @@ label {
   background: var(--ds-color-surface-muted);
 }
 
-/* A badge is a label, not an alert: one neutral look, the meaning is a small coloured dot, so a column of badges stays calm. */
+/* Status is coloured text, not a pill: no border, no background, no dot. Green is the primary colour, a little transparent;
+   red for a problem, amber for something to look at; no colour means plain secondary text. */
 .badge {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 0 6px;
-  border-radius: var(--ds-radius-chip);
-  font-size: var(--ds-font-size-caption);
-  font-weight: 400;
-  line-height: 1.6;
-  background: transparent;
   color: var(--ds-color-text-secondary);
-  border: 1px solid var(--ds-color-border);
   white-space: nowrap;
 }
-.badge.success::before,
-.badge.warning::before,
-.badge.error::before,
-.badge.info::before {
-  content: "";
-  width: 6px;
-  height: 6px;
-  flex-shrink: 0;
-  border-radius: 50%;
+.badge.success,
+.status-ok {
+  color: color-mix(in srgb, var(--ds-color-primary) 80%, transparent);
 }
-.badge.success::before {
-  background: var(--ds-color-accent);
+.badge.error {
+  color: var(--ds-color-error);
 }
-.badge.warning::before {
-  background: var(--ds-color-warning);
-}
-.badge.error::before {
-  background: var(--ds-color-error);
-}
-.badge.info::before {
-  background: var(--ds-color-info);
+.badge.warning {
+  color: var(--ds-color-warning);
 }
 
 .step-nav {
@@ -426,42 +424,8 @@ pre {
   display: none;
 }
 
-.sidebar-badge-dot {
-  position: absolute;
-  top: 6px;
-  right: 12px;
-  width: 6px;
-  height: 6px;
-  border-radius: var(--ds-radius-chip);
-  background: var(--ds-color-accent);
-}
-
-.sidebar-badge-dot.error {
-  background: var(--ds-color-error);
-}
-
-.sidebar-badge-dot.warning {
-  background: var(--ds-color-warning);
-}
-
-.sidebar-badge-dot.info {
-  background: var(--ds-color-info);
-}
-
-.sidebar-badge-dot.success {
-  background: var(--ds-color-accent);
-}
-
 .sidebar-icon {
   font-size: var(--ds-font-size-base);
-}
-
-.sidebar-brief {
-  padding: 12px;
-  margin: 12px;
-  background: var(--ds-color-surface-muted);
-  border: 1px solid var(--ds-color-border);
-  border-radius: var(--ds-radius-card);
 }
 
 .sidebar-footer {
@@ -785,6 +749,29 @@ pre {
   font-size: var(--ds-font-size-small);
   color: var(--ds-color-text-secondary);
   margin: var(--ds-space-unit) 0;
+}
+
+/* Muted text is one line, at most: it is cut with an ellipsis rather than wrapped, so keep it short. */
+.muted-line,
+.pending-hint,
+.pending-meta,
+.pending-note,
+.preview-meta {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.pending-header > div:first-child,
+.preview-header > div:first-child {
+  min-width: 0;
+}
+
+.muted-line {
+  display: block;
+  font-size: var(--ds-font-size-small);
+  color: var(--ds-color-text-secondary);
 }
 
 .pending-tools {
@@ -1155,4 +1142,44 @@ pre {
 .pending-row button {
   flex-shrink: 0;
   white-space: nowrap;
+}
+
+/* Display setting (Settings page): icons and text, text only, or icons only. Set on <html data-display> by useDisplayMode.
+   It applies to the page, never to the sidebar, which always shows both. */
+[data-display="text"] svg[data-icon]:not(.dashboard-sidebar svg) {
+  display: none;
+}
+
+/* a button that is only an icon (a close cross, a trash can) keeps it, whatever the setting */
+[data-display="text"] button[data-iconly] svg[data-icon]:not(.dashboard-sidebar svg) {
+  display: inline;
+}
+
+[data-display="icons"] button:not(.keep-text, .dashboard-sidebar button) {
+  font-size: 0 !important;
+  gap: 0;
+}
+
+/* Uploaded | Pending */
+.library-tabs {
+  display: flex;
+  gap: var(--ds-space-unit);
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--ds-color-border);
+}
+
+.library-tabs button {
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  margin-bottom: -1px;
+  padding: 8px 12px;
+  background: transparent;
+  color: var(--ds-color-text-secondary);
+}
+
+.library-tabs button[aria-selected="true"] {
+  border-bottom-color: var(--ds-color-primary);
+  color: var(--ds-color-text-primary);
+  font-weight: 600;
 }

@@ -26,8 +26,10 @@ npm run build
 ```
 
 ## Look
-Colours, type and radii come from the store's shared design tokens (`accessories-store-system/design-tokens`), the same as the admin; see its README.
-After cloning, `npm install` links them (the store repository must sit next to this project).
+Colours, type and radii are the store's shared design tokens (`accessories-store-system/design-tokens`), the same as the admin; see its README.
+The importer carries its own **copy** in [`src/styles/tokens.css`](src/styles/tokens.css), so `npm install` and `npm run build` work wherever it is
+cloned (next to the store repository, or inside it as a submodule). After the tokens change in the store repo: `npm run tokens:sync` here
+(it finds the store repo, or use `DESIGN_TOKENS_DIR`), and `npm run tokens:check` tells whether the copy is out of date.
 
 ## Layout
 ```

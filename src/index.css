@@ -1,4 +1,5 @@
 /* Look and feel come from the shared design tokens (--ds-*); never write a colour, radius or font size literal.
+   The tokens are in styles/tokens.css, a copy kept in step with accessories-store-system/design-tokens (npm run tokens:sync).
    Reference: accessories-store-system/design-tokens/README.md and admin/DESIGN.md */
 
 *, *::before, *::after {

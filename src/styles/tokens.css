@@ -1,0 +1,80 @@
+/* COPY of the store's shared design tokens (accessories-store-system/design-tokens/dist/tokens.css).
+   Do not edit here: change tokens.json in the store repo, build it there, then run `npm run tokens:sync` in this project. */
+/* GENERATED from tokens.json by build.mjs. Do not edit; run `npm run build` in design-tokens/. */
+:root {
+  --ds-color-accent: #36C78E;
+  --ds-color-on-accent: #0B1F17;
+  --ds-color-warning: #D97706;
+  --ds-color-error: #DC2626;
+  --ds-color-info: #2563EB;
+  --ds-color-canvas: #F6F7F9;
+  --ds-color-surface: #FFFFFF;
+  --ds-color-surface-muted: #F3F4F6;
+  --ds-color-border: #E5E7EB;
+  --ds-color-text-primary: #111827;
+  --ds-color-text-secondary: #6B7280;
+  --ds-color-primary: #15805A;
+  --ds-color-on-primary: #FFFFFF;
+  --ds-status-pending: #F5A524;
+  --ds-status-confirmed: #3B82F6;
+  --ds-status-shipped: #8B5CF6;
+  --ds-status-fulfilled: #36C78E;
+  --ds-status-refused: #F97316;
+  --ds-status-cancelled: #9AA3AE;
+  --ds-status-paid: #0EA5E9;
+  --ds-status-partially-fulfilled: #A78BFA;
+  --ds-status-refunded: #EF4444;
+  --ds-radius-card: 8px;
+  --ds-radius-inner: 6px;
+  --ds-radius-chip: 4px;
+  --ds-space-unit: 8px;
+  --ds-space-card: 20px;
+  --ds-space-gap: 24px;
+  --ds-layout-sidebar: 224px;
+  --ds-layout-sidebar-closed: 64px;
+  --ds-layout-topbar: 56px;
+  --ds-motion-fast: 150ms;
+  --ds-motion-slow: 250ms;
+  --ds-font-family: "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --ds-font-size-base: 14px;
+  --ds-font-size-small: 13px;
+  --ds-font-size-caption: 12px;
+  --ds-font-size-title: 20px;
+  --ds-font-size-kpi: 24px;
+  color-scheme: light dark;
+}
+
+/* follows the system, unless the page forces a mode with <html data-theme="light|dark"> */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ds-color-accent: #36C78E;
+    --ds-color-on-accent: #0B1F17;
+    --ds-color-warning: #D97706;
+    --ds-color-error: #DC2626;
+    --ds-color-info: #2563EB;
+    --ds-color-canvas: #0F1115;
+    --ds-color-surface: #171A1F;
+    --ds-color-surface-muted: #1F232A;
+    --ds-color-border: #2A2F37;
+    --ds-color-text-primary: #E5E7EB;
+    --ds-color-text-secondary: #9CA3AF;
+    --ds-color-primary: #4FD39E;
+    --ds-color-on-primary: #0B1F17;
+  }
+}
+
+:root[data-theme="dark"] {
+  --ds-color-accent: #36C78E;
+  --ds-color-on-accent: #0B1F17;
+  --ds-color-warning: #D97706;
+  --ds-color-error: #DC2626;
+  --ds-color-info: #2563EB;
+  --ds-color-canvas: #0F1115;
+  --ds-color-surface: #171A1F;
+  --ds-color-surface-muted: #1F232A;
+  --ds-color-border: #2A2F37;
+  --ds-color-text-primary: #E5E7EB;
+  --ds-color-text-secondary: #9CA3AF;
+  --ds-color-primary: #4FD39E;
+  --ds-color-on-primary: #0B1F17;
+}
